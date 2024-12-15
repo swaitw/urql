@@ -1,1 +1,2 @@
-export { authExchange, AuthConfig } from './authExchange';
+export { authExchange } from './authExchange';
+export type { AuthUtilities, AuthConfig } from './authExchange';

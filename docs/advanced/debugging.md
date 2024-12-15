@@ -10,13 +10,13 @@ and those creating their own exchanges.
 
 ## Devtools
 
-It's easiest to debug `urql` with the [`urql` devtools.](https://github.com/FormidableLabs/urql-devtools/)
+It's easiest to debug `urql` with the [`urql` devtools.](https://github.com/urql-graphql/urql-devtools/)
 
 It offers tools to inspect internal ["Debug Events"](#debug-events) as they happen, to explore data
 as your app is seeing it, and to quickly trigger GraphQL queries.
 
 [For instructions on how to set up the devtools, check out `@urql/devtools`'s readme in its
-repository.](https://github.com/FormidableLabs/urql-devtools)
+repository.](https://github.com/urql-graphql/urql-devtools)
 
 ![Urql Devtools Timeline](../assets/devtools-timeline.png)
 
@@ -46,7 +46,7 @@ build custom debugging tools, it's also possible to call this function directly 
 
 ```
 const { unsubscribe } = client.subscribeToDebugTarget(event => {
-  if (event.source === 'dedupExchange')
+  if (event.source === 'cacheExchange')
     return;
   console.log(event); // { type, message, operation, data, source, timestamp }
 });
@@ -133,7 +133,7 @@ custom exchanges:
 - ✅ **Create unique event types** : Key events should be easily identifiable and have a unique
   names.
 - ❌ **Don't listen to debug events inside your exchange**: While it's possible to call
-  `client.subscsubscribeToDebugTarget` in an exchange it's only valuable when creating a debugging
+  `client.subscribeToDebugTarget` in an exchange it's only valuable when creating a debugging
   exchange, like the `devtoolsExchange`.
 - ❌ **Don't send warnings in debug events**: Informing your user about warnings isn't effective
   when the event isn't seen. You should still rely on `console.warn` so all users see your important

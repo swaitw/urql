@@ -12,21 +12,31 @@ const hasReact = [
   'dependencies',
   'optionalDependencies',
   'peerDependencies',
-  'devDependencies'
-].some((dep) => pkg[dep] && pkg[dep].react);
+].some(dep => pkg[dep] && pkg[dep].react);
 
-const normalize = name => name
-  .replace(/[@\s\/\.]+/g, ' ')
-  .trim()
-  .replace(/\s+/, '-')
-  .toLowerCase();
+const hasNext = [
+  'dependencies',
+  'optionalDependencies',
+  'peerDependencies',
+].some(dep => pkg[dep] && pkg[dep].next);
+
+const normalize = name =>
+  name
+    .replace(/[@\s/.]+/g, ' ')
+    .trim()
+    .replace(/\s+/, '-')
+    .toLowerCase();
 
 const name = normalize(pkg.name);
 
-const posixPath = x =>
-  path.normalize(x).split(path.sep).join('/');
+const posixPath = x => path.normalize(x).split(path.sep).join('/');
 
 const is = (a, b) => posixPath(a) === posixPath(b);
+
+invariant(
+  pkg.publishConfig.provenance === true,
+  'package.json:publishConfig.provenance must be set to true'
+);
 
 if (pkg.name.startsWith('@urql/')) {
   invariant(
@@ -35,17 +45,14 @@ if (pkg.name.startsWith('@urql/')) {
   );
 }
 
-invariant(
-  !is(cwd, workspaceRoot),
-  'prepare-pkg must be run in a package.'
-);
+invariant(!is(cwd, workspaceRoot), 'prepare-pkg must be run in a package.');
 
 invariant(
   fs.existsSync(pkg.source || 'src/index.ts'),
   'package.json:source must exist'
 );
 
-if (hasReact) {
+if (hasReact && !hasNext) {
   invariant(
     is(pkg.main, path.join('dist', `${name}.js`)),
     'package.json:main path must end in `.js` for packages depending on React.'
@@ -68,32 +75,20 @@ if (hasReact) {
 }
 
 invariant(
-  is(
-    pkg.types,
-    path.join('dist', 'types',
-      path.relative('src', pkg.source || path.join('src', 'index.ts'))
-        .replace(/\.ts$/, '.d.ts'))
-  ),
+  is(pkg.types, path.join('dist', `${name}.d.ts`)),
   'package.json:types path must be valid'
 );
 
 invariant(
-  is(
-    pkg.repository.directory,
-    path.relative(workspaceRoot, cwd)
-  ),
+  is(pkg.repository.directory, path.relative(workspaceRoot, cwd)),
   'package.json:repository.directory path is invalid'
 );
 
-invariant(
-  pkg.sideEffects === false,
-  'package.json:sideEffects must be false'
-);
+invariant(pkg.sideEffects === false, 'package.json:sideEffects must be false');
 
-invariant(
-  pkg.license === 'MIT',
-  'package.json:license must be "MIT"'
-);
+invariant(!!pkg.author, 'package.json:author must be defined');
+
+invariant(pkg.license === 'MIT', 'package.json:license must be "MIT"');
 
 invariant(
   Array.isArray(pkg.files) &&
@@ -102,12 +97,43 @@ invariant(
   'package.json:files must include "dist" and "LICENSE"'
 );
 
-if (hasReact) {
-  invariant(!pkg.exports, 'package.json:exports must not be added for packages depending on React.');
+if (pkg.dependencies && pkg.dependencies['@urql/core']) {
+  invariant(
+    !!pkg.peerDependencies && !!pkg.peerDependencies['@urql/core'],
+    'package.json:peerDependencies must contain @urql/core.'
+  );
+}
+
+if (pkg.peerDependencies && pkg.peerDependencies['@urql/core']) {
+  invariant(
+    !!pkg.dependencies && !!pkg.dependencies['@urql/core'],
+    'package.json:dependencies must contain @urql/core.'
+  );
+}
+
+for (const key in pkg.peerDependencies || {}) {
+  const dependency = pkg.peerDependencies[key];
+  invariant(
+    key !== 'react' || key !== 'preact' || !dependency.includes('>='),
+    `Peer Dependency "${key}" must not contain ">=" (greater than) range`
+  );
+}
+
+if (hasReact && !hasNext) {
+  invariant(
+    !pkg.exports,
+    'package.json:exports must not be added for packages depending on React.'
+  );
 } else {
-  invariant(!!pkg.exports, 'package.json:exports must be added and have a "." entry');
+  invariant(
+    !!pkg.exports,
+    'package.json:exports must be added and have a "." entry'
+  );
   invariant(!!pkg.exports['.'], 'package.json:exports must have a "." entry');
-  invariant(!!pkg.exports['./package.json'], 'package.json:exports must have a "./package.json" entry')
+  invariant(
+    !!pkg.exports['./package.json'],
+    'package.json:exports must have a "./package.json" entry'
+  );
 
   for (const key in pkg.exports) {
     const entry = pkg.exports[key];
@@ -131,12 +157,13 @@ if (hasReact) {
     );
 
     invariant(
-      is(
-        entry.types,
-        path.join('./dist/types/',
-          path.relative('src', entry.source).replace(/\.ts$/, '.d.ts'))
-      ),
+      is(entry.types, `./dist/${bundleName}.d.ts`),
       'package.json:types path must be valid'
+    );
+
+    invariant(
+      Object.keys(entry)[0] === 'types',
+      'package.json:types must come first'
     );
   }
 }

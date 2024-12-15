@@ -7,12 +7,14 @@
     "build": "vite build",
     "serve": "vite preview"
   },
-  "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^1.0.0-next.9",
-    "vite": "^2.2.4"
-  },
   "dependencies": {
-    "@urql/svelte": "^1.2.3",
-    "svelte": "^3.38.2"
+    "@urql/core": "^5.1.0",
+    "@urql/svelte": "^4.2.2",
+    "graphql": "^16.6.0",
+    "svelte": "^4.0.5"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^2.4.2",
+    "vite": "^4.2.0"
   }
 }

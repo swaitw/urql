@@ -100,7 +100,7 @@ From the above document we can assume the following relations:
 However, this isn't quite enough yet to store the relations from GraphQL results. The normalized
 cache must also generate primary keys for each entity so that it can store them in table-like data
 structures. This is for instance why [Relay
-enforces](https://relay.dev/docs/en/graphql-server-specification.html#object-identification) that
+enforces](https://relay.dev/docs/guides/graphql-server-specification/#object-identification) that
 each entity must have an `id` field. This allows it to assume that there's an obvious primary key
 for each entity it may query. Instead, `urql`'s Graphcache and Apollo assume that there _may_ be an
 `id` or `_id` field in a given selection set. If Graphcache can't find these two fields it'll issue
@@ -309,6 +309,37 @@ cacheExchange({
 });
 ```
 
+### Flexible Key Generation
+
+In some cases, you may want to create a pattern for your key generation. For instance, you may want
+to say "create a special key for every type ending in `'Node'`. In such a case we recommend creating
+a small JS `Proxy` to take care of key generation for you and making the keys functional.
+
+```js
+cacheExchange({
+  keys: new Proxy(
+    {
+      Image: () => null,
+    },
+    {
+      get(target, prop, receiver) {
+        if (prop.endsWith('Node')) {
+          return data => data.uid;
+        }
+        const fallback = data => data.uuid;
+        return target[prop] || fallback;
+      },
+    }
+  ),
+});
+```
+
+In the above example, we dynamically change the key generator depending on the typename. When
+a typename ends in `'Node'`, we return a key generator that uses the `uid` field. We still fall back
+to an object of manual key generation functions however. Lastly though, when a type doesn't have
+a predefined key generator, we change the default behavior from using `id` and `_id` fields to using
+`uuid` fields.
+
 ## Non-Automatic Relations and Updates
 
 While _Graphcache_ is able to store and update our entities in an in-memory relational data
@@ -362,7 +393,7 @@ Since it can access the field's arguments from the GraphQL query document, we ca
 object is keyable, it will tell _Graphcache_ what the key of the returned entity is. In other words,
 we've told it how to get to a `Todo` from the `Query.todo` field.
 
-This mechanism is immensely more powerful than this example. We have two other use-cases that
+This mechanism is immensely more powerful than this example. We have other use-cases that
 resolvers may be used for:
 
 - Resolvers can be applied to fields with records, which means that it can be used to change or
@@ -371,6 +402,12 @@ resolvers may be used for:
 - Resolvers can return deeply nested results, which will be layered on top of the in-memory
   relational cached data of _Graphcache_, which means that it can emulate infinite pagination and
   other complex behaviour.
+- Resolvers can change when a cache miss or hit occurs. Returning `null` means that a field’s value
+  is literally `null`, which will not cause a cache miss, while returning `undefined` will mean
+  a field’s value is uncached.
+- Resolvers can return either partial entities or keys, so we can chain `cache.resolve` calls to
+  read fields from the cache, even when a field is pointing at another entity, since we can return
+  keys to the other entity directly.
 
 [Read more about resolvers on the following page about "Local Resolvers".](./local-resolvers.md)
 
@@ -444,6 +481,10 @@ added the `Todo` is already being written to the cache.
 As we can see, we may perform manual changes inside of `updates` functions, which can be used to
 affect other parts of the cache (like `Query.todos` here) beyond the automatic updates that a
 normalized cache is expected to perform.
+
+We get methods like `cache.updateQuery`, `cache.writeFragment`, and `cache.link` in our updater
+functions, which aren't available to us in local resolvers, and can only be used in these `updates`
+entries to change the data that the cache holds.
 
 [Read more about writing cache updates on the "Cache Updates" page.](./cache-updates.md)
 

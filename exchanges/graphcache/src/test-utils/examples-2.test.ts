@@ -1,6 +1,8 @@
 import { gql } from '@urql/core';
-import { query, write } from '../operations';
-import { Store } from '../store';
+import { it, afterEach, expect } from 'vitest';
+import { __initAnd_query as query } from '../operations/query';
+import { __initAnd_write as write } from '../operations/write';
+import { Store } from '../store/store';
 
 const Item = gql`
   {
@@ -227,7 +229,7 @@ it('allows custom resolvers to resolve mixed data (keyable and unkeyable)', () =
 
   const res = query(store, { query: ItemDetailed });
   expect(res.partial).toBe(false);
-  expect(res.dependencies).toHaveProperty('Author:x', true);
+  expect(res.dependencies.has('Author:x')).toBeTruthy();
   expect(res.data).toEqual({
     todo: {
       __typename: 'Todo',

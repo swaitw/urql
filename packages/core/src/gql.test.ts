@@ -1,11 +1,13 @@
-import { parse, print } from 'graphql';
+import { parse, print } from '@0no-co/graphql.web';
+import { vi, expect, it, beforeEach, MockInstance } from 'vitest';
+
 import { gql } from './gql';
 import { keyDocument } from './utils';
 
-let warn: jest.SpyInstance;
+let warn: MockInstance;
 
 beforeEach(() => {
-  warn = jest.spyOn(console, 'warn');
+  warn = vi.spyOn(console, 'warn');
   warn.mockClear();
 });
 
@@ -21,10 +23,10 @@ it('parses GraphQL Documents', () => {
     parse('{ gql testing }', { noLocation: true }).definitions
   );
 
-  expect(doc).toBe(keyDocument('{ gql testing }'));
+  expect(doc).toBe(keyDocument('{\n  gql\n  testing\n}'));
   expect(doc.loc).toEqual({
     start: 0,
-    end: 15,
+    end: 19,
     source: expect.anything(),
   });
 });
@@ -77,19 +79,17 @@ it('warns on duplicate fragment names with different sources', () => {
 
 it('interpolates nested GraphQL Documents', () => {
   expect(
-    print(
-      gql`
-        query {
-          ...Query
-        }
+    print(gql`
+      query {
+        ...Query
+      }
 
-        ${gql`
-          fragment Query on Query {
-            field
-          }
-        `}
-      `
-    )
+      ${gql`
+        fragment Query on Query {
+          field
+        }
+      `}
+    `)
   ).toMatchInlineSnapshot(`
     "{
       ...Query

@@ -1,4 +1,5 @@
 import { pipe, map, makeSubject, publish, tap } from 'wonka';
+import { vi, expect, it, beforeEach } from 'vitest';
 
 import {
   gql,
@@ -8,9 +9,10 @@ import {
   ExchangeIO,
 } from '@urql/core';
 
+import { queryResponse } from '../../../packages/core/src/test-utils';
 import { requestPolicyExchange } from './requestPolicyExchange';
 
-const dispatchDebug = jest.fn();
+const dispatchDebug = vi.fn();
 
 const mockOptions = {
   ttl: 5,
@@ -36,7 +38,10 @@ const queryOneData = {
 
 let client, op, ops$, next;
 beforeEach(() => {
-  client = createClient({ url: 'http://0.0.0.0' });
+  client = createClient({
+    url: 'http://0.0.0.0',
+    exchanges: [],
+  });
   op = client.createRequestOperation('query', {
     key: 1,
     query: queryOne,
@@ -45,17 +50,16 @@ beforeEach(() => {
   ({ source: ops$, next } = makeSubject<Operation>());
 });
 
-it(`upgrades to cache-and-network`, done => {
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      return {
-        operation: forwardOp,
-        data: queryOneData,
-      };
-    }
-  );
+it(`upgrades to cache-and-network`, async () => {
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    return {
+      ...queryResponse,
+      operation: forwardOp,
+      data: queryOneData,
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
@@ -78,33 +82,34 @@ it(`upgrades to cache-and-network`, done => {
   );
   expect(result).toHaveBeenCalledTimes(1);
 
-  setTimeout(() => {
-    next(op);
-    expect(response).toHaveBeenCalledTimes(2);
-    expect(response.mock.calls[1][0].context.requestPolicy).toEqual(
-      'cache-and-network'
-    );
-    expect(result).toHaveBeenCalledTimes(2);
-    done();
-  }, 10);
+  await new Promise(res => {
+    setTimeout(() => {
+      next(op);
+      expect(response).toHaveBeenCalledTimes(2);
+      expect(response.mock.calls[1][0].context.requestPolicy).toEqual(
+        'cache-and-network'
+      );
+      expect(result).toHaveBeenCalledTimes(2);
+      res(null);
+    }, 10);
+  });
 });
 
-it(`doesn't upgrade when shouldUpgrade returns false`, done => {
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      return {
-        operation: forwardOp,
-        data: queryOneData,
-      };
-    }
-  );
+it(`doesn't upgrade when shouldUpgrade returns false`, async () => {
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    return {
+      ...queryResponse,
+      operation: forwardOp,
+      data: queryOneData,
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
 
-  const shouldUpgrade = jest.fn(() => false);
+  const shouldUpgrade = vi.fn(() => false);
   pipe(
     requestPolicyExchange({ ...mockOptions, shouldUpgrade })({
       forward,
@@ -123,14 +128,16 @@ it(`doesn't upgrade when shouldUpgrade returns false`, done => {
   );
   expect(result).toHaveBeenCalledTimes(1);
 
-  setTimeout(() => {
-    next(op);
-    expect(response).toHaveBeenCalledTimes(2);
-    expect(response.mock.calls[1][0].context.requestPolicy).toEqual(
-      'cache-first'
-    );
-    expect(result).toHaveBeenCalledTimes(2);
-    expect(shouldUpgrade).toBeCalledTimes(2);
-    done();
-  }, 10);
+  await new Promise(res => {
+    setTimeout(() => {
+      next(op);
+      expect(response).toHaveBeenCalledTimes(2);
+      expect(response.mock.calls[1][0].context.requestPolicy).toEqual(
+        'cache-first'
+      );
+      expect(result).toHaveBeenCalledTimes(2);
+      expect(shouldUpgrade).toBeCalledTimes(2);
+      res(null);
+    }, 10);
+  });
 });

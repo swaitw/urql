@@ -1,12 +1,13 @@
-/* eslint-disable react-hooks/rules-of-hooks */
+// @vitest-environment jsdom
+import { vi, expect, it, beforeEach, describe, Mock } from 'vitest';
 
 // Note: Testing for hooks is not yet supported in Enzyme - https://github.com/airbnb/enzyme/issues/2011
-jest.mock('../context', () => {
+vi.mock('../context', async () => {
   const d = { data: 1234, error: 5678 };
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { merge, fromValue, never } = require('wonka');
+  const { merge, fromValue, never } =
+    await vi.importActual<typeof import('wonka')>('wonka');
   const mock = {
-    executeSubscription: jest.fn(() => merge([fromValue(d), never])),
+    executeSubscription: vi.fn(() => merge([fromValue(d), never])),
   };
 
   return {
@@ -22,11 +23,11 @@ import { useSubscription, UseSubscriptionState } from './useSubscription';
 import { useClient } from '../context';
 
 // @ts-ignore
-const client = useClient() as { executeSubscription: jest.Mock };
+const client = useClient() as { executeSubscription: Mock };
 const query = 'subscription Example { example }';
 
 let state: UseSubscriptionState<any> | undefined;
-let execute: ((opts?: Partial<OperationContext>) => void) | undefined;
+let execute: ((_opts?: Partial<OperationContext>) => void) | undefined;
 
 const SubscriptionUser = ({
   q,
@@ -35,7 +36,7 @@ const SubscriptionUser = ({
   pause = false,
 }: {
   q: string;
-  handler?: (prev: any, data: any) => any;
+  handler?: (_prev: any, _data: any) => any;
   context?: Partial<OperationContext>;
   pause?: boolean;
 }) => {
@@ -78,7 +79,7 @@ it('should support setting context in useSubscription params', () => {
 });
 
 it('calls handler', () => {
-  const handler = jest.fn();
+  const handler = vi.fn();
   const wrapper = renderer.create(
     <SubscriptionUser q={query} handler={handler} />
   );

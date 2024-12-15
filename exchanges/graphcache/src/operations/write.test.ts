@@ -2,10 +2,11 @@
 
 import { gql, CombinedError } from '@urql/core';
 import { minifyIntrospectionQuery } from '@urql/introspection';
+import { vi, expect, it, beforeEach, describe, beforeAll } from 'vitest';
 
-import { write } from './write';
+import { __initAnd_write as write } from './write';
 import * as InMemoryData from '../store/data';
-import { Store } from '../store';
+import { Store } from '../store/store';
 
 const TODO_QUERY = gql`
   query todos {
@@ -47,7 +48,7 @@ describe('Query', () => {
       }
     );
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('should not crash for valid writes', async () => {
@@ -161,15 +162,17 @@ describe('Query', () => {
       }
     `;
 
-    write(store, { query }, { field: 'test' } as any);
     // This should not overwrite the field
     write(store, { query }, { field: undefined } as any);
     // Because of us writing an undefined field
     expect(console.warn).toHaveBeenCalledTimes(2);
-    expect((console.warn as any).mock.calls[0][0]).toMatch(
-      /The field `field` does not exist on `Query`/
+
+    expect((console.warn as any).mock.calls[1][0]).toMatch(
+      /Invalid undefined: The field at `field`/
     );
 
+    write(store, { query }, { field: 'test' } as any);
+    write(store, { query }, { field: undefined } as any);
     InMemoryData.initDataState('read', store.data, null);
     // The field must still be `'test'`
     expect(InMemoryData.readRecord('Query', 'field')).toBe('test');

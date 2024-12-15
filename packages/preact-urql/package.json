@@ -1,33 +1,34 @@
 {
   "name": "@urql/preact",
-  "version": "2.0.3",
+  "version": "4.1.1",
   "description": "A highly customizable and versatile GraphQL client for Preact",
   "sideEffects": false,
   "homepage": "https://formidable.com/open-source/urql/docs/",
-  "bugs": "https://github.com/FormidableLabs/urql/issues",
+  "bugs": "https://github.com/urql-graphql/urql/issues",
   "license": "MIT",
+  "author": "urql GraphQL Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FormidableLabs/urql.git",
+    "url": "https://github.com/urql-graphql/urql.git",
     "directory": "packages/preact-urql"
   },
   "keywords": [
     "graphql client",
     "state management",
     "cache",
-    "formidablelabs",
+    "graphql",
     "exchanges",
     "preact"
   ],
   "main": "dist/urql-preact",
   "module": "dist/urql-preact.mjs",
-  "types": "dist/types/index.d.ts",
+  "types": "dist/urql-preact.d.ts",
   "source": "src/index.ts",
   "exports": {
     ".": {
+      "types": "./dist/urql-preact.d.ts",
       "import": "./dist/urql-preact.mjs",
       "require": "./dist/urql-preact.js",
-      "types": "./dist/types/index.d.ts",
       "source": "./src/index.ts"
     },
     "./package.json": "./package.json"
@@ -39,31 +40,30 @@
     "dist/"
   ],
   "scripts": {
-    "test": "jest",
+    "test": "vitest",
     "clean": "rimraf dist",
     "check": "tsc --noEmit",
     "lint": "eslint --ext=js,jsx,ts,tsx .",
-    "build": "rollup -c ../../scripts/rollup/config.js",
+    "build": "rollup -c ../../scripts/rollup/config.mjs",
     "prepare": "node ../../scripts/prepare/index.js",
     "prepublishOnly": "run-s clean build"
   },
-  "jest": {
-    "preset": "../../scripts/jest/preset"
-  },
   "devDependencies": {
     "@testing-library/preact": "^2.0.0",
+    "@urql/core": "workspace:*",
     "graphql": "^16.0.0",
-    "preact": "^10.5.5"
+    "preact": "^10.13.0"
   },
   "peerDependencies": {
-    "graphql": "^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0",
+    "@urql/core": "^5.0.0",
     "preact": ">= 10.0.0"
   },
   "dependencies": {
-    "@urql/core": "^2.3.6",
-    "wonka": "^4.0.14"
+    "@urql/core": "workspace:^5.1.0",
+    "wonka": "^6.3.2"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

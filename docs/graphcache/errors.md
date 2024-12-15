@@ -1,6 +1,6 @@
 ---
 title: Errors
-order: 7
+order: 8
 ---
 
 # Help!
@@ -107,6 +107,9 @@ is maybe empty or does not contain fragments.
 When you're calling a fragment method, please ensure that you're only passing fragments
 in your GraphQL document. The first fragment will be used to start writing data.
 
+This also occurs when you pass in a `fragmentName` but a fragment with the given name
+can't be found in the `DocumentNode`.
+
 ## (7) Can't generate a key for readFragment(...)
 
 > Can't generate a key for readFragment(...).
@@ -171,6 +174,9 @@ is maybe empty or does not contain fragments.
 When you're calling a fragment method, please ensure that you're only passing fragments
 in your GraphQL document. The first fragment will be used to start writing data.
 
+This also occurs when you pass in a `fragmentName` but a fragment with the given name
+can't be found in the `DocumentNode`.
+
 ## (12) Can't generate a key for writeFragment(...) or link(...)
 
 > Can't generate a key for writeFragment(...) [or link(...) data.
@@ -218,7 +224,7 @@ Please make sure that you include enough properties on your data so that `write`
 This error occurs when the cache can't generate a key for an entity. The key
 would then effectively be `null`, and the entity won't be cached by a key.
 
-Conceptually this means that an entity won't be normalised but will indeed
+Conceptually this means that an entity won't be normalized but will indeed
 be cached by the parent's key and field, which is displayed in the first
 part of the warning.
 
@@ -302,26 +308,28 @@ This error occurs when an unknown type is found in `opts.keys`.
 Check whether your schema is up-to-date, or whether you're using an invalid
 typename in `opts.keys`, maybe due to a typo.
 
-## (21) Invalid mutation
+## (21) Invalid updates type
 
-> Invalid mutation field `???` is not in the defined schema, but the `updates` option is referencing it.
-
-When you're passing an introspected schema to the cache exchange, it is
-able to check whether your `opts.updates.Mutation` is valid.
-This error occurs when an unknown mutation field is found in `opts.updates.Mutation`.
-
-Check whether your schema is up-to-date, or whether you've got a typo in `opts.updates.Mutation`.
-
-## (22) Invalid subscription
-
-> Invalid subscription field: `???` is not in the defined schema, but the `updates` option is referencing it.
+> Invalid updates field: The type `???` is not an object in the defined schema,
+> but the `updates` config is referencing it.
 
 When you're passing an introspected schema to the cache exchange, it is
-able to check whether your `opts.updates.Subscription` is valid.
-This error occurs when an unknown subscription field is found in `opts.updates.Subscription`.
+able to check whether your `opts.updates` config is valid.
+This error occurs when an unknown type is found in the `opts.updates` config.
+
+Check whether your schema is up-to-date, or whether you've got a typo in `opts.updates`.
+
+## (22) Invalid updates field
+
+> Invalid updates field: `???` on `???` is not in the defined schema,
+> but the `updates` config is referencing it.
+
+When you're passing an introspected schema to the cache exchange, it is
+able to check whether your `opts.updates` config is valid.
+This error occurs when an unknown field is found in `opts.updates[typename]`.
 
 Check whether your schema is up-to-date, or whether you're using an invalid
-subscription name in `opts.updates.Subscription`, maybe due to a typo.
+field name in `opts.updates`, maybe due to a typo.
 
 ## (23) Invalid resolver
 
@@ -364,7 +372,7 @@ When your schema treats `Mutation` or `Subscription` like regular entity types y
 warning. This may happen because you've used the default reserved names `Mutation` or `Subscription`
 for entities rather than as special Operation Root Types, and haven't specified this in the schema.
 Hence this issue can often be fixed by either enabling
-[Schema Awareness](https://formidable.com/open-source/urql/docs/graphcache/schema-awareness/) or by
+[Schema Awareness](./schema-awareness.md) or by
 adding a `schema` definition to your GraphQL Schema like so:
 
 ```graphql
@@ -389,3 +397,22 @@ This error occurs when you are using an `interface` or `union` rather than an
 implemented type for these.
 
 Check the type mentioned and change it to one of the specific types.
+
+## (27) Invalid Cache write
+
+> Invalid Cache write: You may not write to the cache during cache reads.
+> Accesses to `cache.writeFragment`, `cache.updateQuery`, and `cache.link` may
+> not be made inside `resolvers` for instance.
+
+If you're using the `Cache` inside your `cacheExchange` config you receive it
+either inside callbacks that are called when the cache is queried (e.g.
+`resolvers`) or when data is written to the cache (e.g. `updates`). You may not
+write to the cache when it's being queried.
+
+Please make sure that you're not calling `cache.updateQuery`,
+`cache.writeFragment`, or `cache.link` inside `resolvers`.
+
+## (28) Resolver and directive match the same field
+
+When you have a resolver defined on a field you shouln't be combining it with a directive as the directive
+will apply and the resolver will be void.

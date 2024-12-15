@@ -1,5 +1,45 @@
 # @urql/introspection
 
+## 1.1.0
+
+### Minor Changes
+
+- Mark `@urql/core` as a peer dependency as well as a regular dependency
+  Submitted by [@kitten](https://github.com/kitten) (See [#3579](https://github.com/urql-graphql/urql/pull/3579))
+
+## 1.0.3
+
+### Patch Changes
+
+- ⚠️ Fix `Any` type being included, even when it isn’t needed
+  Submitted by [@kitten](https://github.com/kitten) (See [#3481](https://github.com/urql-graphql/urql/pull/3481))
+
+## 1.0.2
+
+### Patch Changes
+
+- Publish with npm provenance
+  Submitted by [@kitten](https://github.com/kitten) (See [#3180](https://github.com/urql-graphql/urql/pull/3180))
+
+## 1.0.1
+
+### Patch Changes
+
+- Add TSDocs to `@urql/*` packages
+  Submitted by [@kitten](https://github.com/kitten) (See [#3079](https://github.com/urql-graphql/urql/pull/3079))
+
+## 1.0.0
+
+### Major Changes
+
+- **Goodbye IE11!** 👋 This major release removes support for IE11. All code that is shipped will be transpiled much less and will _not_ be ES5-compatible anymore, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+
+## 0.3.3
+
+### Patch Changes
+
+- Avoid making the imports of `@urql/introspection` more specific than they need to be, this because we aren't optimizing for bundle size and in pure node usage this can confuse Node as `import x from 'graphql'` won't share the same module scope as `import x from 'graphql/x/y.mjs'`, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2529](https://github.com/FormidableLabs/urql/pull/2529))
+
 ## 0.3.2
 
 ### Patch Changes

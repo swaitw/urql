@@ -1,6 +1,6 @@
 ---
 title: Offline Support
-order: 6
+order: 7
 ---
 
 # Offline Support
@@ -32,7 +32,7 @@ To actually now set up offline support, we'll swap out the `cacheExchange` with 
 `offlineExchange` that's also exported by `@urql/exchange-graphcache`.
 
 ```js
-import { createClient, dedupExchange, fetchExchange } from 'urql';
+import { Client, fetchExchange } from 'urql';
 import { offlineExchange } from '@urql/exchange-graphcache';
 
 const cache = offlineExchange({
@@ -45,9 +45,9 @@ const cache = offlineExchange({
   },
 });
 
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:3000/graphql',
-  exchanges: [dedupExchange, cache, fetchExchange],
+  exchanges: [cache, fetchExchange],
 });
 ```
 
@@ -61,7 +61,7 @@ persist the cache's data. We can use this default storage by importing the `make
 function from `@urql/exchange-graphcache/default-storage`.
 
 ```js
-import { createClient, dedupExchange, fetchExchange } from 'urql';
+import { Client, fetchExchange } from 'urql';
 import { offlineExchange } from '@urql/exchange-graphcache';
 import { makeDefaultStorage } from '@urql/exchange-graphcache/default-storage';
 
@@ -81,9 +81,9 @@ const cache = offlineExchange({
   },
 });
 
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:3000/graphql',
-  exchanges: [dedupExchange, cache, fetchExchange],
+  exchanges: [cache, fetchExchange],
 });
 ```
 
@@ -91,7 +91,8 @@ const client = createClient({
 
 For React Native, we can use the async storage package `@urql/storage-rn`.
 
-Before installing the [library](https://github.com/FormidableLabs/urql/tree/main/packages/storage-rn), ensure you have installed the necessary peer dependencies:
+Before installing the [library](https://github.com/urql-graphql/urql/tree/main/packages/storage-rn), ensure you have installed the necessary peer dependencies:
+
 - NetInfo ([RN](https://github.com/react-native-netinfo/react-native-netinfo) | [Expo](https://docs.expo.dev/versions/latest/sdk/netinfo/)) and
 - AsyncStorage ([RN](https://react-native-async-storage.github.io/async-storage/docs/install) | [Expo](https://docs.expo.dev/versions/v42.0.0/sdk/async-storage/)).
 
@@ -103,14 +104,13 @@ npm install --save @urql/storage-rn
 
 You can then create the custom storage and use it in the offline exchange:
 
-
 ```js
 import { makeAsyncStorage } from '@urql/storage-rn';
 
 const storage = makeAsyncStorage({
   dataKey: 'graphcache-data', // The AsyncStorage key used for the data (defaults to graphcache-data)
   metadataKey: 'graphcache-metadata', // The AsyncStorage key used for the metadata (defaults to graphcache-metadata)
-  maxAge: 7 // How long to persist the data in storage (defaults to 7 days)
+  maxAge: 7, // How long to persist the data in storage (defaults to 7 days)
 });
 ```
 
@@ -125,8 +125,7 @@ While the client is offline, _Graphcache_ will also apply some opinionated mecha
 mutations.
 
 When a query fails with a Network Error, which indicates that the client is
-offline — either because `navigator.onLine` is `false` or because the error message indicates an
-offline error — the `offlineExchange` won't deliver the error for this query to avoid it from being
+offline the `offlineExchange` won't deliver the error for this query to avoid it from being
 surfaced to the user. This works particularly well in combination with ["Schema
 Awareness"](./schema-awareness.md) which will deliver as much of a partial query result as possible.
 In combination with the [`cache-and-network` request policy](../basics/document-caching.md#request-policies)
@@ -137,6 +136,22 @@ A similar mechanism is applied to optimistic mutations when the user is offline.
 non-optimistic mutations are executed as usual and may fail with a network error. Optimistic
 mutations however will be queued up and may be retried when the app is restarted or when the user
 comes back online.
+
+If we wish to customize when an operation result from the API is deemed an operation that has failed
+because the device is offline, we can pass a custom `isOfflineError` function to the
+`offlineExchange`, like so:
+
+```js
+const cache = offlineExchange({
+  isOfflineError(error, _result) {
+    return !!error.networkError;
+  },
+  // ...
+});
+```
+
+However, this is optional, and the default function checks for common offline error messages and
+checks `navigator.onLine` for you.
 
 ## Custom Storages
 

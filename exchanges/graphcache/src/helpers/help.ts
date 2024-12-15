@@ -3,7 +3,12 @@
 // Every warning and error comes with a number that uniquely identifies them.
 // You can read more about the messages themselves in `docs/graphcache/errors.md`
 
-import { Kind, ExecutableDefinitionNode, InlineFragmentNode } from 'graphql';
+import type {
+  ExecutableDefinitionNode,
+  InlineFragmentNode,
+} from '@0no-co/graphql.web';
+import type { Logger } from '../types';
+import { Kind } from '@0no-co/graphql.web';
 
 export type ErrorCode =
   | 1
@@ -31,7 +36,9 @@ export type ErrorCode =
   | 23
   | 24
   | 25
-  | 26;
+  | 26
+  | 27
+  | 28;
 
 type DebugNode = ExecutableDefinitionNode | InlineFragmentNode;
 
@@ -83,9 +90,17 @@ export function invariant(
   }
 }
 
-export function warn(message: string, code: ErrorCode) {
+export function warn(
+  message: string,
+  code: ErrorCode,
+  logger: Logger | undefined
+) {
   if (!cache.has(message)) {
-    console.warn(message + getDebugOutput() + helpUrl + code);
+    if (logger) {
+      logger('warn', message + getDebugOutput() + helpUrl + code);
+    } else {
+      console.warn(message + getDebugOutput() + helpUrl + code);
+    }
     cache.add(message);
   }
 }

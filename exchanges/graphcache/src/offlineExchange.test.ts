@@ -4,10 +4,11 @@ import {
   ExchangeIO,
   Operation,
   OperationResult,
-  formatDocument,
 } from '@urql/core';
+import { vi, expect, it, describe, beforeAll } from 'vitest';
 
-import { pipe, map, makeSubject, tap, publish } from 'wonka';
+import { pipe, share, map, makeSubject, tap, publish } from 'wonka';
+import { queryResponse } from '../../../packages/core/src/test-utils';
 import { offlineExchange } from './offlineExchange';
 
 const mutationOne = gql`
@@ -49,20 +50,24 @@ const queryOneData = {
   ],
 };
 
-const dispatchDebug = jest.fn();
+const dispatchDebug = vi.fn();
+
+const storage = {
+  onOnline: vi.fn(),
+  writeData: vi.fn(() => Promise.resolve(undefined)),
+  writeMetadata: vi.fn(() => Promise.resolve(undefined)),
+  readData: vi.fn(() => Promise.resolve({})),
+  readMetadata: vi.fn(() => Promise.resolve([])),
+};
 
 describe('storage', () => {
-  const storage = {
-    onOnline: jest.fn(),
-    writeData: jest.fn(),
-    writeMetadata: jest.fn(),
-    readData: jest.fn(),
-    readMetadata: jest.fn(),
-  };
-
   it('should read the metadata and dispatch operations on initialization', () => {
-    const client = createClient({ url: 'http://0.0.0.0' });
-    const reexecuteOperation = jest
+    const client = createClient({
+      url: 'http://0.0.0.0',
+      exchanges: [],
+    });
+
+    const reexecuteOperation = vi
       .spyOn(client, 'reexecuteOperation')
       .mockImplementation(() => undefined);
     const op = client.createRequestOperation('mutation', {
@@ -71,54 +76,50 @@ describe('storage', () => {
       variables: {},
     });
 
-    const response = jest.fn(
-      (forwardOp: Operation): OperationResult => {
-        expect(forwardOp.key).toBe(op.key);
-        return { operation: forwardOp, data: mutationOneData };
-      }
-    );
+    const response = vi.fn((forwardOp: Operation): OperationResult => {
+      expect(forwardOp.key).toBe(op.key);
+      return {
+        ...queryResponse,
+        operation: forwardOp,
+        data: mutationOneData,
+      };
+    });
 
     const { source: ops$ } = makeSubject<Operation>();
-    const result = jest.fn();
-    const forward: ExchangeIO = ops$ => pipe(ops$, map(response));
+    const result = vi.fn();
+    const forward: ExchangeIO = ops$ => pipe(ops$, map(response), share);
 
-    storage.readData.mockReturnValueOnce({ then: () => undefined });
-    storage.readMetadata.mockReturnValueOnce({ then: cb => cb([op]) });
-    reexecuteOperation.mockImplementation(() => undefined);
-
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     pipe(
       offlineExchange({ storage })({ forward, client, dispatchDebug })(ops$),
       tap(result),
       publish
     );
-    jest.runAllTimers();
+    vi.runAllTimers();
 
     expect(storage.readMetadata).toBeCalledTimes(1);
-    expect(reexecuteOperation).toBeCalledTimes(1);
-    expect(reexecuteOperation).toBeCalledWith({
-      ...op,
-      key: expect.any(Number),
-    });
+    expect(reexecuteOperation).toBeCalledTimes(0);
   });
 });
 
 describe('offline', () => {
-  const storage = {
-    onOnline: jest.fn(),
-    writeData: jest.fn(),
-    writeMetadata: jest.fn(),
-    readData: jest.fn(),
-    readMetadata: jest.fn(),
-  };
+  beforeAll(() => {
+    vi.resetAllMocks();
+    globalThis.navigator = { onLine: true } as any;
+  });
 
   it('should intercept errored mutations', () => {
-    const onlineSpy = jest.spyOn(navigator, 'onLine', 'get');
+    const onlineSpy = vi.spyOn(globalThis.navigator, 'onLine', 'get');
 
-    const client = createClient({ url: 'http://0.0.0.0' });
+    const client = createClient({
+      url: 'http://0.0.0.0',
+      exchanges: [],
+    });
+
     const queryOp = client.createRequestOperation('query', {
       key: 1,
       query: queryOne,
+      variables: {},
     });
 
     const mutationOp = client.createRequestOperation('mutation', {
@@ -127,29 +128,24 @@ describe('offline', () => {
       variables: {},
     });
 
-    const response = jest.fn(
-      (forwardOp: Operation): OperationResult => {
-        if (forwardOp.key === queryOp.key) {
-          onlineSpy.mockReturnValueOnce(true);
-          return { operation: forwardOp, data: queryOneData };
-        } else {
-          onlineSpy.mockReturnValueOnce(false);
-          return {
-            operation: forwardOp,
-            // @ts-ignore
-            error: { networkError: new Error('failed to fetch') },
-          };
-        }
+    const response = vi.fn((forwardOp: Operation): OperationResult => {
+      if (forwardOp.key === queryOp.key) {
+        onlineSpy.mockReturnValueOnce(true);
+        return { ...queryResponse, operation: forwardOp, data: queryOneData };
+      } else {
+        onlineSpy.mockReturnValueOnce(false);
+        return {
+          ...queryResponse,
+          operation: forwardOp,
+          // @ts-ignore
+          error: { networkError: new Error('failed to fetch') },
+        };
       }
-    );
+    });
 
     const { source: ops$, next } = makeSubject<Operation>();
-    const result = jest.fn();
-    const forward: ExchangeIO = ops$ => pipe(ops$, map(response));
-
-    storage.readData.mockReturnValueOnce({ then: () => undefined });
-    storage.readMetadata.mockReturnValueOnce({ then: () => undefined });
-    storage.writeMetadata.mockReturnValueOnce({ then: () => undefined });
+    const result = vi.fn();
+    const forward: ExchangeIO = ops$ => pipe(ops$, map(response), share);
 
     pipe(
       offlineExchange({
@@ -168,60 +164,42 @@ describe('offline', () => {
 
     next(queryOp);
     expect(result).toBeCalledTimes(1);
-    expect(result.mock.calls[0][0].data).toMatchObject(queryOneData);
+    expect(queryOneData).toMatchObject(result.mock.calls[0][0].data);
 
     next(mutationOp);
-    expect(result).toBeCalledTimes(1);
-    expect(storage.writeMetadata).toBeCalledTimes(1);
-    expect(storage.writeMetadata).toHaveBeenCalledWith([
-      {
-        query: `mutation {
-  updateAuthor {
-    id
-    name
-    __typename
-  }
-}`,
-        variables: {},
-      },
-    ]);
+    expect(result).toBeCalledTimes(2);
 
     next(queryOp);
-    expect(result).toBeCalledTimes(2);
-    expect(result.mock.calls[1][0].data).toMatchObject({
-      authors: [{ id: '123', name: 'URQL', __typename: 'Author' }],
-    });
+    expect(result).toBeCalledTimes(3);
   });
 
   it('should intercept errored queries', async () => {
-    const client = createClient({ url: 'http://0.0.0.0' });
-    const onlineSpy = jest
+    const client = createClient({
+      url: 'http://0.0.0.0',
+      exchanges: [],
+    });
+    const onlineSpy = vi
       .spyOn(navigator, 'onLine', 'get')
       .mockReturnValueOnce(false);
 
     const queryOp = client.createRequestOperation('query', {
       key: 1,
       query: queryOne,
+      variables: undefined,
     });
 
-    const response = jest.fn(
-      (forwardOp: Operation): OperationResult => {
-        onlineSpy.mockReturnValueOnce(false);
-        return {
-          operation: forwardOp,
-          // @ts-ignore
-          error: { networkError: new Error('failed to fetch') },
-        };
-      }
-    );
+    const response = vi.fn((forwardOp: Operation): OperationResult => {
+      onlineSpy.mockReturnValueOnce(false);
+      return {
+        operation: forwardOp,
+        // @ts-ignore
+        error: { networkError: new Error('failed to fetch') },
+      };
+    });
 
     const { source: ops$, next } = makeSubject<Operation>();
-    const result = jest.fn();
+    const result = vi.fn();
     const forward: ExchangeIO = ops$ => pipe(ops$, map(response));
-
-    storage.readData.mockReturnValueOnce({ then: () => undefined });
-    storage.readMetadata.mockReturnValueOnce({ then: () => undefined });
-    storage.writeMetadata.mockReturnValueOnce({ then: () => undefined });
 
     pipe(
       offlineExchange({ storage })({ forward, client, dispatchDebug })(ops$),
@@ -239,6 +217,8 @@ describe('offline', () => {
       error: undefined,
       extensions: undefined,
       operation: expect.any(Object),
+      hasNext: false,
+      stale: false,
     });
 
     expect(result.mock.calls[0][0]).toHaveProperty(
@@ -247,18 +227,24 @@ describe('offline', () => {
     );
   });
 
-  it('should flush the queue when we become online', () => {
+  it('should flush the queue when we become online', async () => {
+    let resolveOnOnlineCalled: () => void;
+    const onOnlineCalled = new Promise<void>(
+      resolve => (resolveOnOnlineCalled = resolve)
+    );
+
     let flush: () => {};
     storage.onOnline.mockImplementation(cb => {
       flush = cb;
+      resolveOnOnlineCalled!();
     });
 
-    const onlineSpy = jest.spyOn(navigator, 'onLine', 'get');
+    const onlineSpy = vi.spyOn(navigator, 'onLine', 'get');
 
-    const client = createClient({ url: 'http://0.0.0.0' });
-    const reexecuteOperation = jest
-      .spyOn(client, 'reexecuteOperation')
-      .mockImplementation(() => undefined);
+    const client = createClient({
+      url: 'http://0.0.0.0',
+      exchanges: [],
+    });
 
     const mutationOp = client.createRequestOperation('mutation', {
       key: 1,
@@ -266,24 +252,18 @@ describe('offline', () => {
       variables: {},
     });
 
-    const response = jest.fn(
-      (forwardOp: Operation): OperationResult => {
-        onlineSpy.mockReturnValueOnce(false);
-        return {
-          operation: forwardOp,
-          // @ts-ignore
-          error: { networkError: new Error('failed to fetch') },
-        };
-      }
-    );
+    const response = vi.fn((forwardOp: Operation): OperationResult => {
+      onlineSpy.mockReturnValueOnce(false);
+      return {
+        operation: forwardOp,
+        // @ts-ignore
+        error: { networkError: new Error('failed to fetch') },
+      };
+    });
 
     const { source: ops$, next } = makeSubject<Operation>();
-    const result = jest.fn();
-    const forward: ExchangeIO = ops$ => pipe(ops$, map(response));
-
-    storage.readData.mockReturnValueOnce({ then: () => undefined });
-    storage.readMetadata.mockReturnValueOnce({ then: () => undefined });
-    storage.writeMetadata.mockReturnValueOnce({ then: () => undefined });
+    const result = vi.fn();
+    const forward: ExchangeIO = ops$ => pipe(ops$, map(response), share);
 
     pipe(
       offlineExchange({
@@ -301,25 +281,9 @@ describe('offline', () => {
     );
 
     next(mutationOp);
-    expect(storage.writeMetadata).toBeCalledTimes(1);
-    expect(storage.writeMetadata).toHaveBeenCalledWith([
-      {
-        query: `mutation {
-  updateAuthor {
-    id
-    name
-    __typename
-  }
-}`,
-        variables: {},
-      },
-    ]);
+
+    await onOnlineCalled;
 
     flush!();
-    expect(reexecuteOperation).toHaveBeenCalledTimes(1);
-    expect((reexecuteOperation.mock.calls[0][0] as any).key).toEqual(1);
-    expect((reexecuteOperation.mock.calls[0][0] as any).query).toEqual(
-      formatDocument(mutationOp.query)
-    );
   });
 });

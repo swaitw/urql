@@ -1,5 +1,106 @@
 # Changelog
 
+## 1.1.3
+
+### Patch Changes
+
+- Add type for hasNext to the query-state in urql-next
+  Submitted by [@isy](https://github.com/isy) (See [#3707](https://github.com/urql-graphql/urql/pull/3707))
+
+## 1.1.2
+
+### Patch Changes
+
+- export SSRContext from provider
+  Submitted by [@ccummings](https://github.com/ccummings) (See [#3659](https://github.com/urql-graphql/urql/pull/3659))
+
+## 1.1.1
+
+### Patch Changes
+
+- ⚠️ Fix `CVE-2024-24556`, addressing an XSS vulnerability, where `@urql/next` failed to escape HTML characters in JSON payloads injected into RSC hydration bodies. When an attacker is able to manipulate strings in the JSON response in RSC payloads, this could cause HTML to be evaluated via a typical XSS vulnerability (See [`GHSA-qhjf-hm5j-335w`](https://github.com/urql-graphql/urql/security/advisories/GHSA-qhjf-hm5j-335w) for details.)
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [`4b7011b7`](https://github.com/urql-graphql/urql/commit/4b7011b70d5718728ff912d02a4dbdc7f703540d))
+
+## 1.1.0
+
+### Minor Changes
+
+- Support a `nonce` prop on `DataHydrationContextProvider` that passes it onto its script tags' attributes
+  Submitted by [@Enalmada](https://github.com/Enalmada) (See [#3398](https://github.com/urql-graphql/urql/pull/3398))
+
+### Patch Changes
+
+- ⚠️ Fix invalid CJS by importing react with import-all semantics
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3405](https://github.com/urql-graphql/urql/pull/3405))
+
+## 1.0.0
+
+### Major Changes
+
+- Create `@urql/next` which is a package meant to support Next 13 and
+  the React 18 features contained within.
+  For server components we have `@urql/next/rsc` and for client components
+  just `@urql/next`
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3214](https://github.com/urql-graphql/urql/pull/3214))
+
+## 5.0.2
+
+### Patch Changes
+
+- Switch `react` imports to namespace imports, and update build process for CommonJS outputs to interoperate with `__esModule` marked modules again
+  Submitted by [@kitten](https://github.com/kitten) (See [#3251](https://github.com/urql-graphql/urql/pull/3251))
+
+## 5.0.1
+
+### Patch Changes
+
+- Publish with npm provenance
+  Submitted by [@kitten](https://github.com/kitten) (See [#3180](https://github.com/urql-graphql/urql/pull/3180))
+
+## 5.0.0
+
+### Patch Changes
+
+- Add TSDocs to `@urql/*` packages
+  Submitted by [@kitten](https://github.com/kitten) (See [#3079](https://github.com/urql-graphql/urql/pull/3079))
+- Updated dependencies (See [#3053](https://github.com/urql-graphql/urql/pull/3053), [#3104](https://github.com/urql-graphql/urql/pull/3104), [#3095](https://github.com/urql-graphql/urql/pull/3095), [#3033](https://github.com/urql-graphql/urql/pull/3033), [#3103](https://github.com/urql-graphql/urql/pull/3103), and [#3079](https://github.com/urql-graphql/urql/pull/3079))
+  - urql@4.0.0
+
+## 4.0.3
+
+### Patch Changes
+
+- Add `pageProps: {}` entry to props on app components, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2909](https://github.com/urql-graphql/urql/pull/2909))
+
+## 4.0.2
+
+### Patch Changes
+
+- ⚠️ Fix type-generation, with a change in TS/Rollup the type generation took the paths as src and resolved them into the types dir, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2870](https://github.com/urql-graphql/urql/pull/2870))
+
+## 4.0.1
+
+### Patch Changes
+
+- Change import for `createClient` to `@urql/core`, which helps Next not depend on `urql` and hence not cause `createContext` to be called when the import is treeshaken away, by [@SleeplessOne1917](https://github.com/SleeplessOne1917) (See [#2833](https://github.com/urql-graphql/urql/pull/2833))
+
+## 4.0.0
+
+### Major Changes
+
+- **Goodbye IE11!** 👋 This major release removes support for IE11. All code that is shipped will be transpiled much less and will _not_ be ES5-compatible anymore, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+
+### Patch Changes
+
+- Updated dependencies (See [#2504](https://github.com/FormidableLabs/urql/pull/2504), [#2607](https://github.com/FormidableLabs/urql/pull/2607), and [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+  - urql@3.0.0
+
+## 3.3.3
+
+### Patch Changes
+
+- ⚠️ Fix Node.js ESM re-export detection for `@urql/core` in `urql` package and CommonJS output for all other CommonJS-first packages. This ensures that Node.js' `cjs-module-lexer` can correctly identify re-exports and report them properly. Otherwise, this will lead to a runtime error, by [@kitten](https://github.com/kitten) (See [#2485](https://github.com/FormidableLabs/urql/pull/2485))
+
 ## 3.3.2
 
 ### Patch Changes

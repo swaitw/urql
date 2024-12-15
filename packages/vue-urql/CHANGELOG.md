@@ -1,5 +1,186 @@
 # @urql/vue
 
+## 1.4.2
+
+### Patch Changes
+
+- Add type for `hasNext` to the query and mutation results
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3703](https://github.com/urql-graphql/urql/pull/3703))
+
+## 1.4.1
+
+### Patch Changes
+
+- Use `shallowRef` for data variable to avoid extra overhead for heavy objects
+  Submitted by [@yurks](https://github.com/yurks) (See [#3641](https://github.com/urql-graphql/urql/pull/3641))
+
+## 1.4.0
+
+### Minor Changes
+
+- Refactor composable functions with a focus on avoiding memory leaks and Vue best practices
+  Submitted by [@yurks](https://github.com/yurks) (See [#3619](https://github.com/urql-graphql/urql/pull/3619))
+
+## 1.3.2
+
+### Patch Changes
+
+- ⚠️ Fix deep options reactivity for subscriptions
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3616](https://github.com/urql-graphql/urql/pull/3616))
+
+## 1.3.1
+
+### Patch Changes
+
+- ⚠️ Fix variables losing reactivity
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3614](https://github.com/urql-graphql/urql/pull/3614))
+
+## 1.3.0
+
+### Minor Changes
+
+- Use `shallowRef` to avoid creating deeply reactive objects for heavy objects
+  Submitted by [@negezor](https://github.com/negezor) (See [#3611](https://github.com/urql-graphql/urql/pull/3611))
+- Remove wrapping request `args` in `reactive` to fix memory leak
+  Submitted by [@negezor](https://github.com/negezor) (See [#3612](https://github.com/urql-graphql/urql/pull/3612))
+
+## 1.2.2
+
+### Patch Changes
+
+- ⚠️ Fix reactaive typings for `variables` (See [#3605](https://github.com/urql-graphql/urql/pull/3605))
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [`118d74b2`](https://github.com/urql-graphql/urql/commit/118d74b238007264cacfb91fc12de74370d5766e))
+- Restore the possibility to use a getter for the pause property
+  Submitted by [@arkandias](https://github.com/arkandias) (See [#3598](https://github.com/urql-graphql/urql/pull/3598))
+
+## 1.2.1
+
+### Patch Changes
+
+- ⚠️ Fix regression causing `pause` argument on `useQuery` and `useSubscription` to not be reactive
+  Submitted by [@arkandias](https://github.com/arkandias) (See [#3595](https://github.com/urql-graphql/urql/pull/3595))
+
+## 1.2.0
+
+### Minor Changes
+
+- Mark `@urql/core` as a peer dependency as well as a regular dependency
+  Submitted by [@kitten](https://github.com/kitten) (See [#3579](https://github.com/urql-graphql/urql/pull/3579))
+
+### Patch Changes
+
+- ⚠️ Fix subscription handlers to not receive `null` values
+  Submitted by [@kitten](https://github.com/kitten) (See [#3581](https://github.com/urql-graphql/urql/pull/3581))
+- Add missing support for getter functions as input arguments values to `useQuery`, `useSubscription`, and `useMutation`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3582](https://github.com/urql-graphql/urql/pull/3582))
+
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies (See [#3520](https://github.com/urql-graphql/urql/pull/3520), [#3553](https://github.com/urql-graphql/urql/pull/3553), and [#3520](https://github.com/urql-graphql/urql/pull/3520))
+  - @urql/core@5.0.0
+
+## 1.1.2
+
+### Patch Changes
+
+- Update build process to generate correct source maps
+  Submitted by [@kitten](https://github.com/kitten) (See [#3201](https://github.com/urql-graphql/urql/pull/3201))
+- Prevent multiple operations being executed in a row when multiple inputs change simultaneously (e.g. `isPaused` and query inputs)
+  Submitted by [@kitten](https://github.com/kitten) (See [#3231](https://github.com/urql-graphql/urql/pull/3231))
+
+## 1.1.1
+
+### Patch Changes
+
+- Publish with npm provenance
+  Submitted by [@kitten](https://github.com/kitten) (See [#3180](https://github.com/urql-graphql/urql/pull/3180))
+
+## 1.1.0
+
+### Minor Changes
+
+- Allow mutations to update their results in bindings when `hasNext: true` is set, which indicates deferred or streamed results
+  Submitted by [@kitten](https://github.com/kitten) (See [#3103](https://github.com/urql-graphql/urql/pull/3103))
+
+### Patch Changes
+
+- ⚠️ Fix source maps included with recently published packages, which lost their `sourcesContent`, including additional source files, and had incorrect paths in some of them
+  Submitted by [@kitten](https://github.com/kitten) (See [#3053](https://github.com/urql-graphql/urql/pull/3053))
+- Upgrade to `wonka@^6.3.0`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3104](https://github.com/urql-graphql/urql/pull/3104))
+- Add TSDocs to all `urql` bindings packages
+  Submitted by [@kitten](https://github.com/kitten) (See [#3079](https://github.com/urql-graphql/urql/pull/3079))
+- Updated dependencies (See [#3101](https://github.com/urql-graphql/urql/pull/3101), [#3033](https://github.com/urql-graphql/urql/pull/3033), [#3054](https://github.com/urql-graphql/urql/pull/3054), [#3053](https://github.com/urql-graphql/urql/pull/3053), [#3060](https://github.com/urql-graphql/urql/pull/3060), [#3081](https://github.com/urql-graphql/urql/pull/3081), [#3039](https://github.com/urql-graphql/urql/pull/3039), [#3104](https://github.com/urql-graphql/urql/pull/3104), [#3082](https://github.com/urql-graphql/urql/pull/3082), [#3097](https://github.com/urql-graphql/urql/pull/3097), [#3061](https://github.com/urql-graphql/urql/pull/3061), [#3055](https://github.com/urql-graphql/urql/pull/3055), [#3085](https://github.com/urql-graphql/urql/pull/3085), [#3079](https://github.com/urql-graphql/urql/pull/3079), [#3087](https://github.com/urql-graphql/urql/pull/3087), [#3059](https://github.com/urql-graphql/urql/pull/3059), [#3055](https://github.com/urql-graphql/urql/pull/3055), [#3057](https://github.com/urql-graphql/urql/pull/3057), [#3050](https://github.com/urql-graphql/urql/pull/3050), [#3062](https://github.com/urql-graphql/urql/pull/3062), [#3051](https://github.com/urql-graphql/urql/pull/3051), [#3043](https://github.com/urql-graphql/urql/pull/3043), [#3063](https://github.com/urql-graphql/urql/pull/3063), [#3054](https://github.com/urql-graphql/urql/pull/3054), [#3102](https://github.com/urql-graphql/urql/pull/3102), [#3097](https://github.com/urql-graphql/urql/pull/3097), [#3106](https://github.com/urql-graphql/urql/pull/3106), [#3058](https://github.com/urql-graphql/urql/pull/3058), and [#3062](https://github.com/urql-graphql/urql/pull/3062))
+  - @urql/core@4.0.0
+
+## 1.0.5
+
+### Patch Changes
+
+- Allow a `Client` provided using `provideClient` to be used in the same component it's been provided in
+  Submitted by [@kitten](https://github.com/kitten) (See [#3018](https://github.com/urql-graphql/urql/pull/3018))
+- ⚠️ Fix type utilities turning the `variables` properties optional when a type from `TypedDocumentNode` has no `Variables` or all optional `Variables`. Previously this would break for wrappers, e.g. in code generators, or when the type didn't quite match what we'd expect
+  Submitted by [@kitten](https://github.com/kitten) (See [#3022](https://github.com/urql-graphql/urql/pull/3022))
+- Updated dependencies (See [#3007](https://github.com/urql-graphql/urql/pull/3007), [#2962](https://github.com/urql-graphql/urql/pull/2962), [#3007](https://github.com/urql-graphql/urql/pull/3007), [#3015](https://github.com/urql-graphql/urql/pull/3015), and [#3022](https://github.com/urql-graphql/urql/pull/3022))
+  - @urql/core@3.2.0
+
+## 1.0.4
+
+### Patch Changes
+
+- ⚠️ Fix type-generation, with a change in TS/Rollup the type generation took the paths as src and resolved them into the types dir, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2870](https://github.com/urql-graphql/urql/pull/2870))
+- Updated dependencies (See [#2872](https://github.com/urql-graphql/urql/pull/2872), [#2870](https://github.com/urql-graphql/urql/pull/2870), and [#2871](https://github.com/urql-graphql/urql/pull/2871))
+  - @urql/core@3.1.1
+
+## 1.0.3
+
+### Patch Changes
+
+- Move remaining `Variables` generics over from `object` default to `Variables extends AnyVariables = AnyVariables`. This has been introduced previously in [#2607](https://github.com/urql-graphql/urql/pull/2607) but some missing ports have been missed due to TypeScript not catching them previously. Depending on your TypeScript version the `object` default is incompatible with `AnyVariables`, by [@kitten](https://github.com/kitten) (See [#2843](https://github.com/urql-graphql/urql/pull/2843))
+- Updated dependencies (See [#2843](https://github.com/urql-graphql/urql/pull/2843), [#2847](https://github.com/urql-graphql/urql/pull/2847), [#2850](https://github.com/urql-graphql/urql/pull/2850), and [#2846](https://github.com/urql-graphql/urql/pull/2846))
+  - @urql/core@3.1.0
+
+## 1.0.2
+
+### Patch Changes
+
+- ⚠️ Fix an issue that caused `useQuery` to fail for promise-based access, if a result is delivered by the `Client` immediately, by [@kitten](https://github.com/kitten) (See [#2629](https://github.com/FormidableLabs/urql/pull/2629))
+
+## 1.0.1
+
+### Patch Changes
+
+- Tweak the variables type for when generics only contain nullable keys, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2623](https://github.com/FormidableLabs/urql/pull/2623))
+
+## 1.0.0
+
+### Major Changes
+
+- **Goodbye IE11!** 👋 This major release removes support for IE11. All code that is shipped will be transpiled much less and will _not_ be ES5-compatible anymore, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+- Implement stricter variables types, which require variables to always be passed and match TypeScript types when the generic is set or inferred. This is a breaking change for TypeScript users potentially, unless all types are adhered to, by [@kitten](https://github.com/kitten) (See [#2607](https://github.com/FormidableLabs/urql/pull/2607))
+- Upgrade to [Wonka v6](https://github.com/0no-co/wonka) (`wonka@^6.0.0`), which has no breaking changes but is built to target ES2015 and comes with other minor improvements.
+  The library has fully been migrated to TypeScript which will hopefully help with making contributions easier!, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+
+### Patch Changes
+
+- Support nested refs in variables, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2608](https://github.com/FormidableLabs/urql/pull/2608))
+- Updated dependencies (See [#2551](https://github.com/FormidableLabs/urql/pull/2551), [#2504](https://github.com/FormidableLabs/urql/pull/2504), [#2619](https://github.com/FormidableLabs/urql/pull/2619), [#2607](https://github.com/FormidableLabs/urql/pull/2607), and [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+  - @urql/core@3.0.0
+
+## 0.6.4
+
+### Patch Changes
+
+- Allow Vue 2.7 as peer dependency to prevent peer dependency errors e.g. with pnpm, by [@dargmuesli](https://github.com/dargmuesli) (See [#2561](https://github.com/FormidableLabs/urql/pull/2561))
+
+## 0.6.3
+
+### Patch Changes
+
+- ⚠️ Fix Node.js ESM re-export detection for `@urql/core` in `urql` package and CommonJS output for all other CommonJS-first packages. This ensures that Node.js' `cjs-module-lexer` can correctly identify re-exports and report them properly. Otherwise, this will lead to a runtime error, by [@kitten](https://github.com/kitten) (See [#2485](https://github.com/FormidableLabs/urql/pull/2485))
+
 ## 0.6.2
 
 ### Patch Changes

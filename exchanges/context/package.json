@@ -1,0 +1,65 @@
+{
+  "name": "@urql/exchange-context",
+  "version": "0.3.0",
+  "description": "An exchange for setting (a)synchronous operation-context in urql",
+  "sideEffects": false,
+  "homepage": "https://formidable.com/open-source/urql/docs/",
+  "bugs": "https://github.com/urql-graphql/urql/issues",
+  "license": "MIT",
+  "author": "urql GraphQL Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/urql-graphql/urql.git",
+    "directory": "exchanges/context"
+  },
+  "keywords": [
+    "urql",
+    "exchange",
+    "context",
+    "graphql",
+    "exchanges"
+  ],
+  "main": "dist/urql-exchange-context",
+  "module": "dist/urql-exchange-context.mjs",
+  "types": "dist/urql-exchange-context.d.ts",
+  "source": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/urql-exchange-context.d.ts",
+      "import": "./dist/urql-exchange-context.mjs",
+      "require": "./dist/urql-exchange-context.js",
+      "source": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "README.md",
+    "dist/"
+  ],
+  "scripts": {
+    "test": "vitest",
+    "clean": "rimraf dist extras",
+    "check": "tsc --noEmit",
+    "lint": "eslint --ext=js,jsx,ts,tsx .",
+    "build": "rollup -c ../../scripts/rollup/config.mjs",
+    "prepare": "node ../../scripts/prepare/index.js",
+    "prepublishOnly": "run-s clean build"
+  },
+  "peerDependencies": {
+    "@urql/core": "^5.0.0"
+  },
+  "dependencies": {
+    "@urql/core": "workspace:^5.1.0",
+    "wonka": "^6.3.2"
+  },
+  "devDependencies": {
+    "@urql/core": "workspace:*",
+    "graphql": "^16.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

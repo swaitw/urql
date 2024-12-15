@@ -1,16 +1,18 @@
-jest.mock('graphql', () => {
-  const graphql = jest.requireActual('graphql');
+import { vi, expect, it, beforeEach, afterEach, describe, Mock } from 'vitest';
+
+vi.mock('graphql', async () => {
+  const graphql = await vi.importActual<typeof import('graphql')>('graphql');
 
   return {
     __esModule: true,
-    ...graphql,
-    print: jest.fn(() => '{ placeholder }'),
-    execute: jest.fn(() => ({ key: 'value' })),
-    subscribe: jest.fn(),
+    ...(graphql as object),
+    print: vi.fn(() => '{ placeholder }'),
+    execute: vi.fn(() => ({ key: 'value' })),
+    subscribe: vi.fn(),
   };
 });
 
-import { fetchExchange } from 'urql';
+import { fetchExchange } from '@urql/core';
 import { executeExchange } from './execute';
 import { execute, print, subscribe } from 'graphql';
 import {
@@ -26,12 +28,11 @@ import {
   context,
   queryOperation,
   subscriptionOperation,
-} from '@urql/core/test-utils';
+} from '../../../packages/core/src/test-utils';
 import {
   makeErrorResult,
   makeOperation,
   Client,
-  getOperationName,
   OperationResult,
 } from '@urql/core';
 
@@ -43,16 +44,14 @@ const exchangeArgs = {
   client: {},
 } as any;
 
-const expectedQueryOperationName = getOperationName(queryOperation.query);
-const expectedSubscribeOperationName = getOperationName(
-  subscriptionOperation.query
-);
+const expectedQueryOperationName = 'getUser';
+const expectedSubscribeOperationName = 'subscribeToUser';
 
-const fetchMock = (global as any).fetch as jest.Mock;
+const fetchMock = (globalThis as any).fetch as Mock;
 const mockHttpResponseData = { key: 'value' };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mocked(print).mockImplementation(a => a as any);
   mocked(execute).mockResolvedValue({ data: mockHttpResponseData });
   mocked(subscribe).mockImplementation(async function* x(this: any) {
@@ -142,6 +141,33 @@ describe('on operation', () => {
     });
   });
 
+  it('calls execute after executing context as a function returning a Promise', async () => {
+    const context = async operation => {
+      expect(operation).toBe(queryOperation);
+      return 'CALCULATED_USER_ID=' + 8 * 10;
+    };
+
+    await pipe(
+      fromValue(queryOperation),
+      executeExchange({ schema, context })(exchangeArgs),
+      take(1),
+      toPromise
+    );
+
+    expect(mocked(execute)).toBeCalledTimes(1);
+    expect(mocked(execute)).toBeCalledWith({
+      schema,
+      document: queryOperation.query,
+      rootValue: undefined,
+      contextValue: 'CALCULATED_USER_ID=80',
+      variableValues: queryOperation.variables,
+      operationName: expectedQueryOperationName,
+      fieldResolver: undefined,
+      typeResolver: undefined,
+      subscribeFieldResolver: undefined,
+    });
+  });
+
   it('should return data from subscribe', async () => {
     const context = 'USER_ID=123';
 
@@ -167,13 +193,16 @@ describe('on operation', () => {
 
     fetchMock.mockResolvedValue({
       status: 200,
-      json: jest.fn().mockResolvedValue({ data: mockHttpResponseData }),
+      headers: { get: () => 'application/json' },
+      text: vi
+        .fn()
+        .mockResolvedValue(JSON.stringify({ data: mockHttpResponseData })),
     });
 
     const responseFromFetchExchange = await pipe(
       fromValue(queryOperation),
       fetchExchange({
-        dispatchDebug: jest.fn(),
+        dispatchDebug: vi.fn(),
         forward: () => empty as Source<OperationResult>,
         client: {} as Client,
       }),
@@ -240,6 +269,7 @@ describe('on success response', () => {
       operation: queryOperation,
       data: mockHttpResponseData,
       hasNext: false,
+      stale: false,
     });
   });
 });

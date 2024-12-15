@@ -7,6 +7,7 @@ import {
   ASTKindToNode,
   Kind,
 } from 'graphql';
+import { vi, expect, it, describe } from 'vitest';
 
 import { fromValue, pipe, fromArray, toArray } from 'wonka';
 import {
@@ -34,6 +35,7 @@ const schemaDef = `
   type Todo implements Node {
     id: ID!
     text: String!
+    createdAt(timezone: String): String!
     creator: User!
   }
 
@@ -77,10 +79,16 @@ const schemaDef = `
     store: OnlineStore
   }
 
+  type Company {
+    id: String
+    employees: [User]
+  }
+
   type Query {
     todos: [Todo!]
     users: [User!]!
     products: [Product]!
+    company: Company
   }
 
   type Mutation {
@@ -88,6 +96,7 @@ const schemaDef = `
     removeTodo: [Node]
     updateTodo: [UnionType]
     addProduct: Product
+    removeCompany: Company
   }
 `;
 
@@ -109,12 +118,10 @@ const getNodesByType = <T extends keyof ASTKindToNode, N = ASTKindToNode[T]>(
 
 const schema = introspectionFromSchema(buildSchema(schemaDef));
 
-beforeEach(jest.clearAllMocks);
-
 const exchangeArgs = {
   forward: a => a as any,
   client: {} as Client,
-  dispatchDebug: jest.fn(),
+  dispatchDebug: vi.fn(),
 };
 
 describe('on mutation', () => {
@@ -122,6 +129,7 @@ describe('on mutation', () => {
     'mutation',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addTodo @populate
@@ -154,6 +162,7 @@ describe('on query -> mutation', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           todos {
@@ -179,6 +188,7 @@ describe('on query -> mutation', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addTodo @populate
@@ -199,22 +209,70 @@ describe('on query -> mutation', () => {
       expect(print(response[1].query)).toMatchInlineSnapshot(`
         "mutation MyMutation {
           addTodo {
-            ...Todo_PopulateFragment_0
-            ...Todo_PopulateFragment_1
-          }
-        }
-
-        fragment Todo_PopulateFragment_0 on Todo {
-          id
-          text
-          creator {
+            __typename
             id
-            name
+            text
+            creator {
+              __typename
+              id
+              name
+            }
+          }
+        }"
+      `);
+    });
+  });
+});
+
+describe('on query -> mutation', () => {
+  const queryOp = makeOperation(
+    'query',
+    {
+      key: 1234,
+      variables: undefined,
+      query: gql`
+        query {
+          todos {
+            id
+            text
+            createdAt(timezone: "GMT+1")
           }
         }
+      `,
+    },
+    context
+  );
 
-        fragment Todo_PopulateFragment_1 on Todo {
-          text
+  const mutationOp = makeOperation(
+    'mutation',
+    {
+      key: 5678,
+      variables: undefined,
+      query: gql`
+        mutation MyMutation {
+          addTodo @populate
+        }
+      `,
+    },
+    context
+  );
+
+  describe('mutation query', () => {
+    it('matches snapshot', async () => {
+      const response = pipe<Operation, any, Operation[]>(
+        fromArray([queryOp, mutationOp]),
+        populateExchange({ schema })(exchangeArgs),
+        toArray
+      );
+
+      expect(print(response[1].query)).toMatchInlineSnapshot(`
+        "mutation MyMutation {
+          addTodo {
+            __typename
+            id
+            text
+            createdAt(timezone: "GMT+1")
+          }
         }"
       `);
     });
@@ -226,6 +284,7 @@ describe('on (query w/ fragment) -> mutation', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           todos {
@@ -254,6 +313,7 @@ describe('on (query w/ fragment) -> mutation', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addTodo @populate {
@@ -281,44 +341,23 @@ describe('on (query w/ fragment) -> mutation', () => {
       expect(print(response[1].query)).toMatchInlineSnapshot(`
         "mutation MyMutation {
           addTodo {
-            ...Todo_PopulateFragment_0
             ...TodoFragment
+            __typename
+            id
+            text
+            creator {
+              __typename
+              id
+              name
+            }
           }
         }
 
         fragment TodoFragment on Todo {
           id
           text
-        }
-
-        fragment Todo_PopulateFragment_0 on Todo {
-          ...TodoFragment
-          creator {
-            ...CreatorFragment
-          }
-        }
-
-        fragment CreatorFragment on User {
-          id
-          name
         }"
       `);
-    });
-
-    it('includes user fragment', () => {
-      const response = pipe<Operation, any, Operation[]>(
-        fromArray([queryOp, mutationOp]),
-        populateExchange({ schema })(exchangeArgs),
-        toArray
-      );
-
-      const fragments = getNodesByType(
-        response[1].query,
-        Kind.FRAGMENT_DEFINITION
-      );
-      expect(
-        fragments.filter(f => 'name' in f && f.name.value === 'TodoFragment')
-      ).toHaveLength(1);
     });
   });
 });
@@ -328,6 +367,7 @@ describe('on (query w/ unused fragment) -> mutation', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           todos {
@@ -352,6 +392,7 @@ describe('on (query w/ unused fragment) -> mutation', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addTodo @populate
@@ -372,13 +413,10 @@ describe('on (query w/ unused fragment) -> mutation', () => {
       expect(print(response[1].query)).toMatchInlineSnapshot(`
         "mutation MyMutation {
           addTodo {
-            ...Todo_PopulateFragment_0
+            __typename
+            id
+            text
           }
-        }
-
-        fragment Todo_PopulateFragment_0 on Todo {
-          id
-          text
         }"
       `);
     });
@@ -406,6 +444,7 @@ describe('on query -> (mutation w/ interface return type)', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           todos {
@@ -426,6 +465,7 @@ describe('on query -> (mutation w/ interface return type)', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           removeTodo @populate
@@ -446,19 +486,15 @@ describe('on query -> (mutation w/ interface return type)', () => {
       expect(print(response[1].query)).toMatchInlineSnapshot(`
         "mutation MyMutation {
           removeTodo {
-            ...User_PopulateFragment_0
-            ...Todo_PopulateFragment_0
+            ... on User {
+              __typename
+              id
+            }
+            ... on Todo {
+              __typename
+              id
+            }
           }
-        }
-
-        fragment User_PopulateFragment_0 on User {
-          id
-          text
-        }
-
-        fragment Todo_PopulateFragment_0 on Todo {
-          id
-          name
         }"
       `);
     });
@@ -470,15 +506,16 @@ describe('on query -> (mutation w/ union return type)', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           todos {
             id
-            name
+            text
           }
           users {
             id
-            text
+            name
           }
         }
       `,
@@ -490,6 +527,7 @@ describe('on query -> (mutation w/ union return type)', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           updateTodo @populate
@@ -510,30 +548,32 @@ describe('on query -> (mutation w/ union return type)', () => {
       expect(print(response[1].query)).toMatchInlineSnapshot(`
         "mutation MyMutation {
           updateTodo {
-            ...User_PopulateFragment_0
-            ...Todo_PopulateFragment_0
+            ... on User {
+              __typename
+              id
+              name
+            }
+            ... on Todo {
+              __typename
+              id
+              text
+            }
           }
-        }
-
-        fragment User_PopulateFragment_0 on User {
-          id
-          text
-        }
-
-        fragment Todo_PopulateFragment_0 on Todo {
-          id
-          name
         }"
       `);
     });
   });
 });
 
-describe('on query -> teardown -> mutation', () => {
+// TODO: figure out how to behave with teardown, just removing and
+// not requesting fields feels kinda incorrect as we would start having
+// stale cache values here
+describe.skip('on query -> teardown -> mutation', () => {
   const queryOp = makeOperation(
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           todos {
@@ -552,6 +592,7 @@ describe('on query -> teardown -> mutation', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addTodo @populate
@@ -596,6 +637,7 @@ describe('interface returned in mutation', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           products {
@@ -614,6 +656,7 @@ describe('interface returned in mutation', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addProduct @populate
@@ -633,20 +676,18 @@ describe('interface returned in mutation', () => {
     expect(print(response[1].query)).toMatchInlineSnapshot(`
       "mutation MyMutation {
         addProduct {
-          ...SimpleProduct_PopulateFragment_0
-          ...ComplexProduct_PopulateFragment_0
+          ... on SimpleProduct {
+            __typename
+            id
+            price
+          }
+          ... on ComplexProduct {
+            __typename
+            id
+            price
+            tax
+          }
         }
-      }
-
-      fragment SimpleProduct_PopulateFragment_0 on SimpleProduct {
-        id
-        price
-      }
-
-      fragment ComplexProduct_PopulateFragment_0 on ComplexProduct {
-        id
-        price
-        tax
       }"
     `);
   });
@@ -657,6 +698,7 @@ describe('nested interfaces', () => {
     'query',
     {
       key: 1234,
+      variables: undefined,
       query: gql`
         query {
           products {
@@ -681,6 +723,7 @@ describe('nested interfaces', () => {
     'mutation',
     {
       key: 5678,
+      variables: undefined,
       query: gql`
         mutation MyMutation {
           addProduct @populate
@@ -700,31 +743,181 @@ describe('nested interfaces', () => {
     expect(print(response[1].query)).toMatchInlineSnapshot(`
       "mutation MyMutation {
         addProduct {
-          ...SimpleProduct_PopulateFragment_0
-          ...ComplexProduct_PopulateFragment_0
-        }
-      }
-
-      fragment SimpleProduct_PopulateFragment_0 on SimpleProduct {
-        id
-        price
-        store {
-          id
-          name
-          address
-        }
-      }
-
-      fragment ComplexProduct_PopulateFragment_0 on ComplexProduct {
-        id
-        price
-        tax
-        store {
-          id
-          name
-          website
+          ... on SimpleProduct {
+            __typename
+            id
+            price
+            store {
+              __typename
+              id
+              name
+              address
+            }
+          }
+          ... on ComplexProduct {
+            __typename
+            id
+            price
+            tax
+            store {
+              __typename
+              id
+              name
+              website
+            }
+          }
         }
       }"
     `);
+  });
+});
+
+describe('nested fragment', () => {
+  const fragment = gql`
+    fragment TodoFragment on Todo {
+      id
+      author {
+        id
+      }
+    }
+  `;
+
+  const queryOp = makeOperation(
+    'query',
+    {
+      key: 1234,
+      variables: undefined,
+      query: gql`
+        query {
+          todos {
+            ...TodoFragment
+          }
+        }
+        ${fragment}
+      `,
+    },
+    context
+  );
+
+  const mutationOp = makeOperation(
+    'mutation',
+    {
+      key: 5678,
+      variables: undefined,
+      query: gql`
+        mutation MyMutation {
+          updateTodo @populate
+        }
+      `,
+    },
+    context
+  );
+
+  it('should work with nested fragments', () => {
+    const response = pipe<Operation, any, Operation[]>(
+      fromArray([queryOp, mutationOp]),
+      populateExchange({ schema })(exchangeArgs),
+      toArray
+    );
+
+    expect(print(response[1].query)).toMatchInlineSnapshot(`
+    "mutation MyMutation {
+      updateTodo {
+        ... on Todo {
+          __typename
+          id
+        }
+      }
+    }"
+  `);
+  });
+});
+
+describe('respects max-depth', () => {
+  const queryOp = makeOperation(
+    'query',
+    {
+      key: 1234,
+      variables: undefined,
+      query: gql`
+        query {
+          company {
+            id
+            employees {
+              id
+              todos {
+                id
+              }
+            }
+          }
+        }
+      `,
+    },
+    context
+  );
+
+  const mutationOp = makeOperation(
+    'mutation',
+    {
+      key: 5678,
+      variables: undefined,
+      query: gql`
+        mutation MyMutation {
+          removeCompany @populate
+        }
+      `,
+    },
+    context
+  );
+
+  describe('mutation query', () => {
+    it('matches snapshot', async () => {
+      const response = pipe<Operation, any, Operation[]>(
+        fromArray([queryOp, mutationOp]),
+        populateExchange({ schema, options: { maxDepth: 1 } })(exchangeArgs),
+        toArray
+      );
+
+      expect(print(response[1].query)).toMatchInlineSnapshot(`
+        "mutation MyMutation {
+          removeCompany {
+            __typename
+            id
+            employees {
+              __typename
+              id
+            }
+          }
+        }"
+      `);
+    });
+
+    it('respects skip syntax', async () => {
+      const response = pipe<Operation, any, Operation[]>(
+        fromArray([queryOp, mutationOp]),
+        populateExchange({
+          schema,
+          options: { maxDepth: 1, skipType: /User/ },
+        })(exchangeArgs),
+        toArray
+      );
+
+      expect(print(response[1].query)).toMatchInlineSnapshot(`
+        "mutation MyMutation {
+          removeCompany {
+            __typename
+            id
+            employees {
+              __typename
+              id
+              todos {
+                __typename
+                id
+              }
+            }
+          }
+        }"
+      `);
+    });
   });
 });

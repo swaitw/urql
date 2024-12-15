@@ -1,33 +1,34 @@
 {
   "name": "@urql/vue",
-  "version": "0.6.2",
+  "version": "1.4.2",
   "description": "A highly customizable and versatile GraphQL client for vue",
   "sideEffects": false,
   "homepage": "https://formidable.com/open-source/urql/docs/",
-  "bugs": "https://github.com/FormidableLabs/urql/issues",
+  "bugs": "https://github.com/urql-graphql/urql/issues",
   "license": "MIT",
+  "author": "urql GraphQL Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FormidableLabs/urql.git",
+    "url": "https://github.com/urql-graphql/urql.git",
     "directory": "packages/vue-urql"
   },
   "keywords": [
     "graphql client",
     "state management",
     "cache",
-    "formidablelabs",
+    "graphql",
     "exchanges",
     "vue"
   ],
   "main": "dist/urql-vue",
   "module": "dist/urql-vue.mjs",
-  "types": "dist/types/index.d.ts",
+  "types": "dist/urql-vue.d.ts",
   "source": "src/index.ts",
   "exports": {
     ".": {
+      "types": "./dist/urql-vue.d.ts",
       "import": "./dist/urql-vue.mjs",
       "require": "./dist/urql-vue.js",
-      "types": "./dist/types/index.d.ts",
       "source": "./src/index.ts"
     },
     "./package.json": "./package.json"
@@ -39,30 +40,30 @@
     "dist/"
   ],
   "scripts": {
-    "test": "jest",
+    "test": "vitest",
     "clean": "rimraf dist",
     "check": "tsc --noEmit",
     "lint": "eslint --ext=js,jsx,ts,tsx .",
-    "build": "rollup -c ../../scripts/rollup/config.js",
+    "build": "rollup -c ../../scripts/rollup/config.mjs",
     "prepare": "node ../../scripts/prepare/index.js",
     "prepublishOnly": "run-s clean build"
   },
-  "jest": {
-    "preset": "../../scripts/jest/preset"
-  },
   "devDependencies": {
+    "@urql/core": "workspace:*",
+    "@vue/test-utils": "^2.3.0",
     "graphql": "^16.0.0",
-    "vue": "^3.0.11"
+    "vue": "^3.2.47"
   },
   "peerDependencies": {
-    "graphql": "^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0",
-    "vue": "^3.0.0"
+    "@urql/core": "^5.0.0",
+    "vue": "^2.7.0 || ^3.0.0"
   },
   "dependencies": {
-    "@urql/core": "^2.3.6",
-    "wonka": "^4.0.14"
+    "@urql/core": "workspace:^5.1.0",
+    "wonka": "^6.3.2"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

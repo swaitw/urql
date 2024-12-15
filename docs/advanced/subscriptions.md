@@ -13,12 +13,13 @@ APIs and ability to handle GraphQL subscriptions.
 To add support for subscriptions we need to add the `subscriptionExchange` to our `Client`.
 
 ```js
-import { Client, defaultExchanges, subscriptionExchange } from 'urql';
+import { Client, cacheExchange, fetchExchange, subscriptionExchange } from 'urql';
 
 const client = new Client({
-  url: '/graphql',
+  url: 'http://localhost:3000/graphql',
   exchanges: [
-    ...defaultExchanges,
+    cacheExchange,
+    fetchExchange,
     subscriptionExchange({
       forwardSubscription,
     }),
@@ -33,35 +34,49 @@ page.](../architecture.md)
 In the above example, we add the `subscriptionExchange` to the `Client` with the default exchanges
 added before it. The `subscriptionExchange` is a factory that accepts additional options and returns
 the actual `Exchange` function. It does not make any assumption over the transport protocol and
-scheme that is used. Instead, we need to pass a `forwardSubscription` function, which is called with
-an "enriched" _Operation_ every time the `Client` attempts to execute a GraphQL Subscription.
+scheme that is used. Instead, we need to pass a `forwardSubscription` function.
+
+The `forwardSubscription` is called when the `subscriptionExchange` receives an `Operation`, so
+typically, when you’re executing a GraphQL subscription. This will call the `forwardSubscription`
+function with a GraphQL request body, in the same shape that a GraphQL HTTP API may receive it as
+JSON input.
+
+If you’re using TypeScript, you may notice that the input that `forwardSubscription` receives has
+an optional `query` property. This is because of persisted query support. For some transports, the
+`query` property may have to be defaulted to an empty string, which matches the GraphQL over HTTP
+specification more closely.
 
 When we define this function it must return an "Observable-like" object, which needs to follow the
 [Observable spec](https://github.com/tc39/proposal-observable), which comes down to having an
 object with a `.subscribe()` method accepting an observer.
 
-## Setting up `graphql-ws`
+### Setting up `graphql-ws`
 
 For backends supporting `graphql-ws`, we recommend using the [graphql-ws](https://github.com/enisdenjo/graphql-ws) client.
 
 ```js
-import { createClient, defaultExchanges, subscriptionExchange } from 'urql';
+import { Client, cacheExchange, fetchExchange, subscriptionExchange } from 'urql';
 import { createClient as createWSClient } from 'graphql-ws';
 
 const wsClient = createWSClient({
   url: 'ws://localhost/graphql',
 });
 
-const client = createClient({
+const client = new Client({
   url: '/graphql',
   exchanges: [
-    ...defaultExchanges,
+    cacheExchange,
+    fetchExchange,
     subscriptionExchange({
-      forwardSubscription: (operation) => ({
-        subscribe: (sink) => ({
-          unsubscribe: wsClient.subscribe(operation, sink),
-        }),
-      }),
+      forwardSubscription(request) {
+        const input = { ...request, query: request.query || '' };
+        return {
+          subscribe(sink) {
+            const unsubscribe = wsClient.subscribe(input, sink);
+            return { unsubscribe };
+          },
+        };
+      },
     }),
   ],
 });
@@ -73,7 +88,7 @@ we return to the `subscriptionExchange` inside `forwardSubscription`.
 
 [Read more on the `graphql-ws` README.](https://github.com/enisdenjo/graphql-ws/blob/master/README.md)
 
-## Setting up `subscriptions-transport-ws`
+### Setting up `subscriptions-transport-ws`
 
 For backends supporting `subscriptions-transport-ws`, [Apollo's `subscriptions-transport-ws`
 package](https://github.com/apollographql/subscriptions-transport-ws) can be used.
@@ -81,7 +96,7 @@ package](https://github.com/apollographql/subscriptions-transport-ws) can be use
 > The `subscriptions-transport-ws` package isn't actively maintained. If your API supports the new protocol or you can swap the package out, consider using [`graphql-ws`](#setting-up-graphql-ws) instead.
 
 ```js
-import { Client, defaultExchanges, subscriptionExchange } from 'urql';
+import { Client, cacheExchange, fetchExchange, subscriptionExchange } from 'urql';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
 
 const subscriptionClient = new SubscriptionClient('ws://localhost/graphql', { reconnect: true });
@@ -89,9 +104,10 @@ const subscriptionClient = new SubscriptionClient('ws://localhost/graphql', { re
 const client = new Client({
   url: '/graphql',
   exchanges: [
-    ...defaultExchanges,
+    cacheExchange,
+    fetchExchange,
     subscriptionExchange({
-      forwardSubscription: (operation) => subscriptionClient.request(operation)
+      forwardSubscription: request => subscriptionClient.request(request),
     }),
   ],
 });
@@ -102,6 +118,29 @@ and are using the `SubscriptionClient`'s `request` method to create a Subscripti
 we return to the `subscriptionExchange` inside `forwardSubscription`.
 
 [Read more about `subscription-transport-ws` on its README.](https://github.com/apollographql/subscriptions-transport-ws/blob/master/README.md)
+
+### Using `fetch` for subscriptions
+
+Some GraphQL backends (for example GraphQL Yoga) support built-in transport protocols that
+can execute subscriptions via a simple HTTP fetch call.
+In fact, this is how `@defer` and `@stream` directives are supported. These transports can
+also be used for subscriptions.
+
+```js
+import { Client, cacheExchange, fetchExchange, subscriptionExchange } from 'urql';
+
+const client = new Client({
+  url: '/graphql',
+  fetchSubscriptions: true,
+  exchanges: [cacheExchange, fetchExchange],
+});
+```
+
+In this example, we only need to enable `fetchSubscriptions: true` on the `Client`, and the
+`fetchExchange` will be used to send subscriptions to the API. If your API supports this transport,
+it will stream results back to the `fetchExchange`.
+
+[You can find a code example of subscriptions via `fetch` in an example in the `urql` repository.](https://github.com/urql-graphql/urql/tree/main/examples/with-subscriptions-via-fetch)
 
 ## React & Preact
 
@@ -168,49 +207,37 @@ messages.
 
 ## Svelte
 
-The `subscription` function in `@urql/svelte` comes with a similar API to `query`, which [we've
+The `subscriptionStore` function in `@urql/svelte` comes with a similar API to `query`, which [we've
 learned about in the "Queries" page in the "Basics" section.](../basics/svelte.md#queries)
 
 Its usage is extremely similar in that it accepts an `operationStore`, which will typically contain
-our GraphQL subscription query. However, `subscription` also accepts a second argument, which is
-a reducer function, similar to what you would pass to `Array.prototype.reduce`.
+our GraphQL subscription query.
 
-It receives the previous set of data that this function has returned or `undefined`.
-As the second argument, it receives the event that has come in from the subscription.
-You can use this to accumulate the data over time, which is useful for a
-list for example.
-
-In the following example, we create a subscription that informs us of
-new messages. We will concatenate the incoming messages so that we
-can display all messages that have come in over the subscription across
-events.
+In the following example, we create a subscription that informs us of new messages.
 
 ```js
 <script>
-  import { operationStore, subscription } from '@urql/svelte';
+  import { gql, getContextClient, subscriptionStore } from '@urql/svelte';
 
-  const messages = operationStore(`
-    subscription MessageSub {
-      newMessages {
-        id
-        from
-        text
+  const messages = subscriptionStore({
+    client: getContextClient(),
+    query: gql`
+      subscription MessageSub {
+        newMessages {
+          id
+          from
+          text
+        }
       }
-    }
-  `);
-
-  const handleSubscription = (messages = [], data) => {
-    return [data.newMessages, ...messages];
-  };
-
-  subscription(messages, handleSubscription);
+    `,
+  });
 </script>
 
 {#if !$messages.data}
   <p>No new messages</p>
 {:else}
   <ul>
-    {#each $messages.data as message}
+    {#each $messages.data.newMessages as message}
       <li>{message.from}: "{message.text}"</li>
     {/each}
   </ul>
@@ -218,11 +245,12 @@ events.
 
 ```
 
-As we can see, the `$messages.data` is being updated and transformed by the `handleSubscription`
-function. This works over time, so as new messages come in, we will append them to
+As we can see, `$messages.data` is being updated and transformed by the `$messages` subscriptionStore. This works over time, so as new messages come in, we will append them to
 the list of previous messages.
 
-[Read more about the `subscription` API in the API docs for it.](../api/svelte.md#subscription)
+`subscriptionStore` optionally accepts a second argument, a handler function, allowing custom update behavior from the subscription.
+
+[Read more about the `subscription` API in the API docs for it.](../api/svelte.md#subscriptionstore)
 
 ## Vue
 
@@ -273,7 +301,7 @@ export default {
             text
           }
         }
-      `
+      `,
     }, handleSubscription)
 
     return {
@@ -304,9 +332,9 @@ subscription may deliver. Let's convert the above example to one without framewo
 use subscriptions in a Node.js environment.
 
 ```js
-import { pipe, subscribe } from 'wonka';
+import { gql } from '@urql/core';
 
-const MessageSub = `
+const MessageSub = gql`
   subscription MessageSub {
     newMessages {
       id
@@ -316,10 +344,7 @@ const MessageSub = `
   }
 `;
 
-const { unsubscribe } = pipe(
-  client.subscription(MessageSub),
-  subscribe(result => {
-    console.log(result); // { data: ... }
-  })
-);
+const { unsubscribe } = client.subscription(MessageSub).subscribe(result => {
+  console.log(result); // { data: ... }
+});
 ```

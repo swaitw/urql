@@ -33,18 +33,20 @@ for breaking changes in the future however, in which case your package manager m
 
 ### Setting up the `Client`
 
-The `@urql/vue` package exports a method called `createClient` which we can use to create
+The `@urql/vue` package exports a `Client` class, which we can use to create
 the GraphQL client. This central `Client` manages all of our GraphQL requests and results.
 
 ```js
-import { createClient } from '@urql/vue';
+import { Client, cacheExchange, fetchExchange } from '@urql/vue';
 
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:3000/graphql',
+  exchanges: [cacheExchange, fetchExchange],
 });
 ```
 
-At the bare minimum we'll need to pass an API's `url` when we create a `Client` to get started.
+At the bare minimum we'll need to pass an API's `url` and `exchanges` when we create a `Client`
+to get started.
 
 Another common option is `fetchOptions`. This option allows us to customize the options that will be
 passed to `fetch` when a request is sent to the given API `url`. We may pass in an options object or
@@ -54,8 +56,9 @@ In the following example we'll add a token to each `fetch` request that our `Cli
 GraphQL API.
 
 ```js
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:3000/graphql',
+  exchanges: [cacheExchange, fetchExchange],
   fetchOptions: () => {
     const token = getToken();
     return {
@@ -73,14 +76,15 @@ different ways to achieve this.
 
 The first method is to use `@urql/vue`'s `provideClient` function. This must be called in any of
 your parent components and accepts either a `Client` directly or just the options that you'd pass to
-`createClient`.
+`Client`.
 
 ```html
 <script>
-  import { createClient, provideClient } from '@urql/vue';
+  import { Client, provideClient, cacheExchange, fetchExchange } from '@urql/vue';
 
-  const client = createClient({
+  const client = new Client({
     url: 'http://localhost:3000/graphql',
+    exchanges: [cacheExchange, fetchExchange],
   });
 
   provideClient(client);
@@ -93,18 +97,19 @@ importing its default export and using it [as a plugin](https://v3.vuejs.org/gui
 ```js
 import { createApp } from 'vue';
 import Root from './App.vue';
-import urql from '@urql/vue';
+import urql, { cacheExchange, fetchExchange } from '@urql/vue';
 
 const app = createApp(Root);
 
 app.use(urql, {
   url: 'http://localhost:3000/graphql',
+  exchanges: [cacheExchange, fetchExchange],
 });
 
 app.mount('#app');
 ```
 
-The plugin also accepts `createClient`'s options or a `Client` as its inputs.
+The plugin also accepts `Client`'s options or a `Client` as its inputs.
 
 ## Queries
 
@@ -131,12 +136,12 @@ todo items. Let's dive right into it!
 </template>
 
 <script>
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   setup() {
     const result = useQuery({
-      query: `
+      query: gql`
         {
           todos {
             id
@@ -157,8 +162,7 @@ export default {
 ```
 
 Here we have implemented our first GraphQL query to fetch todos. We see that `useQuery` accepts
-options and returns a tuple. In this case we've set the `query` option to our GraphQL query. The
-tuple we then get in return is an array that contains a result object and a re-execute function.
+options and returns a result object. In this case we've set the `query` option to our GraphQL query.
 
 The result object contains several properties. The `fetching` field indicates whether we're currently
 loading data, `data` contains the actual `data` from the API's result, and `error` is set when either
@@ -182,13 +186,13 @@ use to supply variables to our query.
 </template>
 
 <script>
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   props: ['from', 'limit'],
   setup({ from, limit }) {
     return useQuery({
-      query: `
+      query: gql`
         query ($from: Int!, $limit: Int!) {
           todos(from: $from, limit: $limit) {
             id
@@ -219,14 +223,14 @@ outputs of `useQuery` are reactive and may change over time.
 </template>
 
 <script>
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   setup() {
     const from = ref(0);
 
     const result = useQuery({
-      query: `
+      query: gql`
         query ($from: Int!, $limit: Int!) {
           todos(from: $from, limit: $limit) {
             id
@@ -264,13 +268,14 @@ whenever these variables are falsy:
 
 ```js
 import { reactive } from 'vue'
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   props: ['from', 'limit'],
   setup({ from, limit }) {
+    const shouldPause = computed(() => from == null || limit == null);
     return useQuery({
-      query: `
+      query: gql`
         query ($from: Int!, $limit: Int!) {
           todos(from: $from, limit: $limit) {
             id
@@ -279,7 +284,7 @@ export default {
         }
       `,
       variables: { from, limit },
-      pause: computed(() => !from.value || !limit.value)
+      pause: shouldPause
     });
   }
 };
@@ -304,12 +309,12 @@ does the result you get back from `useQuery` have an `isPaused` ref, it also has
 </template>
 
 <script>
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   setup() {
     return useQuery({
-      query: `
+      query: gql`
         {
           todos {
             id
@@ -361,10 +366,11 @@ provides metadata apart from the usual `query` and `variables` we may pass. This
 we may also change the `Client`'s default `requestPolicy` by passing it there.
 
 ```js
-import { createClient } from '@urql/vue';
+import { Client, cacheExchange, fetchExchange } from '@urql/vue';
 
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:3000/graphql',
+  exchanges: [cacheExchange, fetchExchange],
   // every operation will by default use cache-and-network rather
   // than cache-first now:
   requestPolicy: 'cache-and-network',
@@ -411,12 +417,12 @@ to refresh data that is currently being displayed. In these cases we may also ov
 `requestPolicy` of our query just once and set it to `network-only` to skip the cache.
 
 ```js
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   setup() {
     const result = useQuery({
-      query: `
+      query: gql`
         {
           todos {
             id
@@ -469,12 +475,12 @@ our examples to have a suspending component by changing our usage of `useQuery`:
 </template>
 
 <script>
-import { useQuery } from '@urql/vue';
+import { gql, useQuery } from '@urql/vue';
 
 export default {
   async setup() {
     const { data, error } = await useQuery({
-      query: `
+      query: gql`
         {
           todos {
             id
@@ -567,7 +573,7 @@ it.](../api/vue.md#usequery)
 
 ## Mutations
 
-The `useMutation` function isn't dissimilar from `useQuery` but is triggered manually and accepts
+The `useMutation` function is similar to `useQuery` but is triggered manually and accepts
 only a `DocumentNode` or `string` as an input.
 
 ### Sending a mutation
@@ -576,13 +582,13 @@ Let's again pick up an example with an imaginary GraphQL API for todo items, and
 example! We'll set up a mutation that _updates_ a todo item's title.
 
 ```js
-import { useMutation } from '@urql/vue';
+import { gql, useMutation } from '@urql/vue';
 
 export default {
   setup() {
-    const { executeMutation: updateTodo } = useMutation(`
+    const { executeMutation: updateTodo } = useMutation(gql`
       mutation ($id: ID!, $title: String!) {
-        updateTodo (id: $id, title: $title) {
+        updateTodo(id: $id, title: $title) {
           id
           title
         }
@@ -612,13 +618,13 @@ from our API. We can either use the result itself, since all properties related 
 `executeMutation` method returns when it's called:
 
 ```js
-import { useMutation } from '@urql/vue';
+import { gql, useMutation } from '@urql/vue';
 
 export default {
   setup() {
-    const updateTodoResult = useMutation(`
+    const updateTodoResult = useMutation(gql`
       mutation ($id: ID!, $title: String!) {
-        updateTodo (id: $id, title: $title) {
+        updateTodo(id: $id, title: $title) {
           id
           title
         }
@@ -653,13 +659,13 @@ to a `CombinedError` when any kind of errors occurred while executing your mutat
 [Read more about errors on our "Errors" page.](./errors.md)
 
 ```js
-import { useMutation } from '@urql/vue';
+import { gql, useMutation } from '@urql/vue';
 
 export default {
   setup() {
-    const updateTodoResult = useMutation(`
+    const updateTodoResult = useMutation(gql`
       mutation ($id: ID!, $title: String!) {
-        updateTodo (id: $id, title: $title) {
+        updateTodo(id: $id, title: $title) {
           id
           title
         }

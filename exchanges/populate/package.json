@@ -1,30 +1,31 @@
 {
   "name": "@urql/exchange-populate",
-  "version": "0.2.3",
+  "version": "1.2.0",
   "description": "An exchange that automaticcally populates the mutation selection body",
   "sideEffects": false,
   "homepage": "https://formidable.com/open-source/urql/docs/advanced/auto-populate-mutations",
-  "bugs": "https://github.com/FormidableLabs/urql/issues",
+  "bugs": "https://github.com/urql-graphql/urql/issues",
   "license": "MIT",
+  "author": "urql GraphQL Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FormidableLabs/urql.git",
+    "url": "https://github.com/urql-graphql/urql.git",
     "directory": "exchanges/populate"
   },
   "keywords": [
     "urql",
-    "formidablelabs",
+    "graphql",
     "exchanges"
   ],
   "main": "dist/urql-exchange-populate",
   "module": "dist/urql-exchange-populate.mjs",
-  "types": "dist/types/index.d.ts",
+  "types": "dist/urql-exchange-populate.d.ts",
   "source": "src/index.ts",
   "exports": {
     ".": {
+      "types": "./dist/urql-exchange-populate.d.ts",
       "import": "./dist/urql-exchange-populate.mjs",
       "require": "./dist/urql-exchange-populate.js",
-      "types": "./dist/types/index.d.ts",
       "source": "./src/index.ts"
     },
     "./package.json": "./package.json"
@@ -37,28 +38,28 @@
     "extras/"
   ],
   "scripts": {
-    "test": "jest",
+    "test": "vitest",
     "clean": "rimraf dist extras",
     "check": "tsc --noEmit",
     "lint": "eslint --ext=js,jsx,ts,tsx .",
-    "build": "rollup -c ../../scripts/rollup/config.js",
+    "build": "rollup -c ../../scripts/rollup/config.mjs",
     "prepare": "node ../../scripts/prepare/index.js",
     "prepublishOnly": "run-s clean build"
   },
-  "jest": {
-    "preset": "../../scripts/jest/preset"
-  },
   "dependencies": {
-    "@urql/core": ">=2.3.6",
-    "wonka": "^4.0.14"
+    "@urql/core": "workspace:^5.1.0",
+    "wonka": "^6.3.2"
   },
   "peerDependencies": {
-    "graphql": "^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0"
+    "@urql/core": "^5.0.0",
+    "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0"
   },
   "devDependencies": {
+    "@urql/core": "workspace:*",
     "graphql": "^16.0.0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

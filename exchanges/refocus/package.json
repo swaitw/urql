@@ -1,33 +1,34 @@
 {
   "name": "@urql/exchange-refocus",
-  "version": "0.2.5",
+  "version": "1.1.0",
   "description": "An exchange that dispatches active operations when the window regains focus",
   "sideEffects": false,
   "homepage": "https://formidable.com/open-source/urql/docs/",
-  "bugs": "https://github.com/FormidableLabs/urql/issues",
+  "bugs": "https://github.com/urql-graphql/urql/issues",
   "license": "MIT",
+  "author": "urql GraphQL Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FormidableLabs/urql.git",
+    "url": "https://github.com/urql-graphql/urql.git",
     "directory": "exchanges/refocus"
   },
   "keywords": [
     "urql",
     "graphql client",
-    "formidablelabs",
+    "graphql",
     "exchanges",
     "react",
     "focus"
   ],
   "main": "dist/urql-exchange-refocus",
   "module": "dist/urql-exchange-refocus.mjs",
-  "types": "dist/types/index.d.ts",
+  "types": "dist/urql-exchange-refocus.d.ts",
   "source": "src/index.ts",
   "exports": {
     ".": {
+      "types": "./dist/urql-exchange-refocus.d.ts",
       "import": "./dist/urql-exchange-refocus.mjs",
       "require": "./dist/urql-exchange-refocus.js",
-      "types": "./dist/types/index.d.ts",
       "source": "./src/index.ts"
     },
     "./package.json": "./package.json"
@@ -39,29 +40,28 @@
     "dist/"
   ],
   "scripts": {
-    "test": "jest",
+    "test": "vitest",
     "clean": "rimraf dist",
     "check": "tsc --noEmit",
     "lint": "eslint --ext=js,jsx,ts,tsx .",
-    "build": "rollup -c ../../scripts/rollup/config.js",
+    "build": "rollup -c ../../scripts/rollup/config.mjs",
     "prepare": "node ../../scripts/prepare/index.js",
     "prepublishOnly": "run-s clean build"
   },
-  "jest": {
-    "preset": "../../scripts/jest/preset"
-  },
   "devDependencies": {
     "@types/react": "^17.0.4",
+    "@urql/core": "workspace:*",
     "graphql": "^16.0.0"
   },
   "peerDependencies": {
-    "graphql": "^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0"
+    "@urql/core": "^5.0.0"
   },
   "dependencies": {
-    "@urql/core": ">=2.3.6",
-    "wonka": "^4.0.14"
+    "@urql/core": "workspace:^5.1.0",
+    "wonka": "^6.3.2"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

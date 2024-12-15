@@ -2,7 +2,7 @@
 
 <p align="center"><strong>An exchange for executing queries against a local schema in <code>urql</code></strong></p>
 
-`@urql/exchange-execute` is an exchange for the [`urql`](https://github.com/FormidableLabs/urql) GraphQL client which executes queries against a local schema.
+`@urql/exchange-execute` is an exchange for the [`urql`](https://github.com/urql-graphql/urql) GraphQL client which executes queries against a local schema.
 This is a replacement for the default _fetchExchange_ which sends queries over HTTP/S to be executed remotely.
 
 ## Quick Start Guide
@@ -19,13 +19,12 @@ You'll then need to add the `executeExchange`, that this package exposes, to you
 by replacing the default fetch exchange with it:
 
 ```js
-import { createClient, dedupExchange, cacheExchange } from 'urql';
+import { createClient, cacheExchange } from 'urql';
 import { executeExchange } from '@urql/exchange-execute';
 
 const client = createClient({
   url: 'http://localhost:1234/graphql',
   exchanges: [
-    dedupExchange,
     cacheExchange,
     // Replace the default fetchExchange with the new one.
     executeExchange({
@@ -82,7 +81,3 @@ executeExchange({
 }),
 // ...
 ```
-
-## Maintenance Status
-
-**Active:** Formidable is actively working on this project, and we expect to continue for work for the foreseeable future. Bug reports, feature requests and pull requests are welcome.

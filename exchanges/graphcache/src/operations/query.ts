@@ -1,50 +1,49 @@
-import { FieldNode, DocumentNode, FragmentDefinitionNode } from 'graphql';
-import { CombinedError } from '@urql/core';
+import type { FormattedNode, CombinedError } from '@urql/core';
+import { formatDocument } from '@urql/core';
 
+import type {
+  FieldNode,
+  DocumentNode,
+  FragmentDefinitionNode,
+} from '@0no-co/graphql.web';
+
+import type { SelectionSet } from '../ast';
 import {
   getSelectionSet,
   getName,
-  SelectionSet,
   getFragmentTypeName,
   getFieldAlias,
   getFragments,
   getMainOperation,
   normalizeVariables,
   getFieldArguments,
+  getDirectives,
 } from '../ast';
 
-import {
+import type {
   Variables,
   Data,
   DataField,
   Link,
   OperationRequest,
   Dependencies,
+  Resolver,
 } from '../types';
 
-import {
-  Store,
-  getCurrentOperation,
-  getCurrentDependencies,
-  initDataState,
-  clearDataState,
-  joinKeys,
-  keyOfField,
-  makeData,
-  ownsData,
-} from '../store';
-
+import { joinKeys, keyOfField } from '../store/keys';
+import type { Store } from '../store/store';
 import * as InMemoryData from '../store/data';
 import { warn, pushDebugNode, popDebugNode } from '../helpers/help';
 
+import type { Context } from './shared';
 import {
-  Context,
-  makeSelectionIterator,
+  SelectionIterator,
   ensureData,
   makeContext,
   updateContext,
   getFieldError,
   deferRef,
+  optionalRef,
 } from './shared';
 
 import {
@@ -56,39 +55,46 @@ import {
 export interface QueryResult {
   dependencies: Dependencies;
   partial: boolean;
+  hasNext: boolean;
   data: null | Data;
 }
 
-export const query = (
+/** Reads a GraphQL query from the cache.
+ * @internal
+ */
+export const __initAnd_query = (
   store: Store,
   request: OperationRequest,
   data?: Data | null | undefined,
   error?: CombinedError | undefined,
   key?: number
 ): QueryResult => {
-  initDataState('read', store.data, key);
-  const result = read(store, request, data, error);
-  clearDataState();
+  InMemoryData.initDataState('read', store.data, key);
+  const result = _query(store, request, data, error);
+  InMemoryData.clearDataState();
   return result;
 };
 
-export const read = (
+/** Reads a GraphQL query from the cache.
+ * @internal
+ */
+export const _query = (
   store: Store,
   request: OperationRequest,
   input?: Data | null | undefined,
   error?: CombinedError | undefined
 ): QueryResult => {
-  const operation = getMainOperation(request.query);
+  const query = formatDocument(request.query);
+  const operation = getMainOperation(query);
   const rootKey = store.rootFields[operation.operation];
   const rootSelect = getSelectionSet(operation);
 
   const ctx = makeContext(
     store,
     normalizeVariables(operation, request.variables),
-    getFragments(request.query),
+    getFragments(query),
     rootKey,
     rootKey,
-    false,
     error
   );
 
@@ -96,23 +102,29 @@ export const read = (
     pushDebugNode(rootKey, operation);
   }
 
-  if (!input) input = makeData();
   // NOTE: This may reuse "previous result data" as indicated by the
   // `originalData` argument in readRoot(). This behaviour isn't used
   // for readSelection() however, which always produces results from
   // scratch
   const data =
     rootKey !== ctx.store.rootFields['query']
-      ? readRoot(ctx, rootKey, rootSelect, input)
-      : readSelection(ctx, rootKey, rootSelect, input);
+      ? readRoot(ctx, rootKey, rootSelect, input || InMemoryData.makeData())
+      : readSelection(
+          ctx,
+          rootKey,
+          rootSelect,
+          input || InMemoryData.makeData()
+        );
 
   if (process.env.NODE_ENV !== 'production') {
     popDebugNode();
+    InMemoryData.getCurrentDependencies();
   }
 
   return {
-    dependencies: getCurrentDependencies(),
+    dependencies: InMemoryData.currentDependencies!,
     partial: ctx.partial || !data,
+    hasNext: ctx.hasNext,
     data: data || null,
   };
 };
@@ -120,7 +132,7 @@ export const read = (
 const readRoot = (
   ctx: Context,
   entityKey: string,
-  select: SelectionSet,
+  select: FormattedNode<SelectionSet>,
   input: Data
 ): Data => {
   const typename = ctx.store.rootNames[entityKey]
@@ -130,12 +142,19 @@ const readRoot = (
     return input;
   }
 
-  const iterate = makeSelectionIterator(entityKey, entityKey, select, ctx);
+  const selection = new SelectionIterator(
+    entityKey,
+    entityKey,
+    false,
+    undefined,
+    select,
+    ctx
+  );
 
-  let node: FieldNode | void;
-  let hasChanged = false;
-  const output = makeData(input);
-  while ((node = iterate())) {
+  let node: FormattedNode<FieldNode> | void;
+  let hasChanged = InMemoryData.currentForeignData;
+  const output = InMemoryData.makeData(input);
+  while ((node = selection.next())) {
     const fieldAlias = getFieldAlias(node);
     const fieldValue = input[fieldAlias];
     // Add the current alias to the walked path before processing the field's value
@@ -166,12 +185,12 @@ const readRoot = (
 
 const readRootField = (
   ctx: Context,
-  select: SelectionSet,
+  select: FormattedNode<SelectionSet>,
   originalData: Link<Data>
 ): Link<Data> => {
   if (Array.isArray(originalData)) {
     const newData = new Array(originalData.length);
-    let hasChanged = false;
+    let hasChanged = InMemoryData.currentForeignData;
     for (let i = 0, l = originalData.length; i < l; i++) {
       // Add the current index to the walked path before reading the field's value
       ctx.__internal.path.push(i);
@@ -198,23 +217,45 @@ const readRootField = (
   }
 };
 
-export const readFragment = (
+export const _queryFragment = (
   store: Store,
-  query: DocumentNode,
+  query: FormattedNode<DocumentNode>,
   entity: Partial<Data> | string,
-  variables?: Variables
+  variables?: Variables,
+  fragmentName?: string
 ): Data | null => {
   const fragments = getFragments(query);
-  const names = Object.keys(fragments);
-  const fragment = fragments[names[0]] as FragmentDefinitionNode;
-  if (!fragment) {
-    warn(
-      'readFragment(...) was called with an empty fragment.\n' +
-        'You have to call it with at least one fragment in your GraphQL document.',
-      6
-    );
 
-    return null;
+  let fragment: FormattedNode<FragmentDefinitionNode>;
+  if (fragmentName) {
+    fragment = fragments[fragmentName]!;
+    if (!fragment) {
+      warn(
+        'readFragment(...) was called with a fragment name that does not exist.\n' +
+          'You provided ' +
+          fragmentName +
+          ' but could only find ' +
+          Object.keys(fragments).join(', ') +
+          '.',
+        6,
+        store.logger
+      );
+
+      return null;
+    }
+  } else {
+    const names = Object.keys(fragments);
+    fragment = fragments[names[0]]!;
+    if (!fragment) {
+      warn(
+        'readFragment(...) was called with an empty fragment.\n' +
+          'You have to call it with at least one fragment in your GraphQL document.',
+        6,
+        store.logger
+      );
+
+      return null;
+    }
   }
 
   const typename = getFragmentTypeName(fragment);
@@ -227,7 +268,8 @@ export const readFragment = (
         'You have to pass an `id` or `_id` field or create a custom `keys` config for `' +
         typename +
         '`.',
-      7
+      7,
+      store.logger
     );
 
     return null;
@@ -242,12 +284,17 @@ export const readFragment = (
     variables || {},
     fragments,
     typename,
-    entityKey
+    entityKey,
+    undefined
   );
 
   const result =
-    readSelection(ctx, entityKey, getSelectionSet(fragment), makeData()) ||
-    null;
+    readSelection(
+      ctx,
+      entityKey,
+      getSelectionSet(fragment),
+      InMemoryData.makeData()
+    ) || null;
 
   if (process.env.NODE_ENV !== 'production') {
     popDebugNode();
@@ -256,15 +303,52 @@ export const readFragment = (
   return result;
 };
 
+function getFieldResolver(
+  directives: ReturnType<typeof getDirectives>,
+  typename: string,
+  fieldName: string,
+  ctx: Context
+): Resolver | void {
+  const resolvers = ctx.store.resolvers[typename];
+  const fieldResolver = resolvers && resolvers[fieldName];
+
+  let directiveResolver: Resolver | undefined;
+  for (const name in directives) {
+    const directiveNode = directives[name];
+    if (
+      directiveNode &&
+      name !== 'include' &&
+      name !== 'skip' &&
+      ctx.store.directives[name]
+    ) {
+      directiveResolver = ctx.store.directives[name](
+        getFieldArguments(directiveNode, ctx.variables)
+      );
+      if (process.env.NODE_ENV === 'production') return directiveResolver;
+      break;
+    }
+  }
+
+  if (fieldResolver && directiveResolver) {
+    warn(
+      `A resolver and directive is being used at "${typename}.${fieldName}" simultaneously. Only the directive will apply.`,
+      28,
+      ctx.store.logger
+    );
+  }
+
+  return directiveResolver || fieldResolver;
+}
+
 const readSelection = (
   ctx: Context,
   key: string,
-  select: SelectionSet,
+  select: FormattedNode<SelectionSet>,
   input: Data,
   result?: Data
 ): Data | undefined => {
   const { store } = ctx;
-  const isQuery = key === store.rootFields['query'];
+  const isQuery = key === store.rootFields.query;
 
   const entityKey = (result && store.keyOfEntity(result)) || key;
   if (!isQuery && !!ctx.store.rootNames[entityKey]) {
@@ -278,7 +362,8 @@ const readSelection = (
         ctx.store.rootFields.subscription +
         '` types are special ' +
         'Operation Root Types and cannot be read back from the cache.',
-      25
+      25,
+      store.logger
     );
   }
 
@@ -295,39 +380,54 @@ const readSelection = (
         entityKey +
         '` returned an ' +
         'invalid typename that could not be reconciled with the cache.',
-      8
+      8,
+      store.logger
     );
 
     return;
   }
 
-  const iterate = makeSelectionIterator(typename, entityKey, select, ctx);
+  const selection = new SelectionIterator(
+    typename,
+    entityKey,
+    false,
+    undefined,
+    select,
+    ctx
+  );
 
   let hasFields = false;
-  let hasPartials = false;
-  let hasChanged = typename !== input.__typename;
-  let node: FieldNode | void;
-  const output = makeData(input);
-  while ((node = iterate()) !== undefined) {
+  let hasNext = false;
+  let hasChanged = InMemoryData.currentForeignData;
+  let node: FormattedNode<FieldNode> | void;
+  const hasPartials = ctx.partial;
+  const output = InMemoryData.makeData(input);
+  while ((node = selection.next()) !== undefined) {
     // Derive the needed data from our node.
     const fieldName = getName(node);
     const fieldArgs = getFieldArguments(node, ctx.variables);
     const fieldAlias = getFieldAlias(node);
+    const directives = getDirectives(node);
+    const resolver = getFieldResolver(directives, typename, fieldName, ctx);
     const fieldKey = keyOfField(fieldName, fieldArgs);
     const key = joinKeys(entityKey, fieldKey);
     const fieldValue = InMemoryData.readRecord(entityKey, fieldKey);
     const resultValue = result ? result[fieldName] : undefined;
-    const resolvers = store.resolvers[typename];
 
     if (process.env.NODE_ENV !== 'production' && store.schema && typename) {
-      isFieldAvailableOnType(store.schema, typename, fieldName);
+      isFieldAvailableOnType(
+        store.schema,
+        typename,
+        fieldName,
+        ctx.store.logger
+      );
     }
 
     // Add the current alias to the walked path before processing the field's value
     ctx.__internal.path.push(fieldAlias);
     // We temporarily store the data field in here, but undefined
     // means that the value is missing from the cache
-    let dataFieldValue: void | DataField;
+    let dataFieldValue: void | DataField = undefined;
 
     if (fieldName === '__typename') {
       // We directly assign the typename as it's already available
@@ -335,23 +435,26 @@ const readSelection = (
     } else if (resultValue !== undefined && node.selectionSet === undefined) {
       // The field is a scalar and can be retrieved directly from the result
       dataFieldValue = resultValue;
-    } else if (
-      getCurrentOperation() === 'read' &&
-      resolvers &&
-      typeof resolvers[fieldName] === 'function'
-    ) {
-      // We have to update the information in context to reflect the info
-      // that the resolver will receive
-      updateContext(ctx, output, typename, entityKey, key, fieldName);
-
+    } else if (InMemoryData.currentOperation === 'read' && resolver) {
       // We have a resolver for this field.
-      // Prepare the actual fieldValue, so that the resolver can use it
-      if (fieldValue !== undefined) {
-        output[fieldAlias] = fieldValue;
+      // Prepare the actual fieldValue, so that the resolver can use it,
+      // as to avoid the user having to do `cache.resolve(parent, info.fieldKey)`
+      // only to get a scalar value.
+      let parent = output;
+      if (node.selectionSet === undefined && fieldValue !== undefined) {
+        parent = {
+          ...output,
+          [fieldAlias]: fieldValue,
+          [fieldName]: fieldValue,
+        };
       }
 
-      dataFieldValue = resolvers[fieldName](
-        output,
+      // We have to update the information in context to reflect the info
+      // that the resolver will receive
+      updateContext(ctx, parent, typename, entityKey, fieldKey, fieldName);
+
+      dataFieldValue = resolver(
+        parent,
         fieldArgs || ({} as Variables),
         store,
         ctx
@@ -370,14 +473,14 @@ const readSelection = (
             ? output[fieldAlias]
             : input[fieldAlias]) as Data,
           dataFieldValue,
-          ownsData(input)
+          InMemoryData.ownsData(input)
         );
       }
 
       if (
         store.schema &&
         dataFieldValue === null &&
-        !isFieldNullable(store.schema, typename, fieldName)
+        !isFieldNullable(store.schema, typename, fieldName, ctx.store.logger)
       ) {
         // Special case for when null is not a valid value for the
         // current field
@@ -398,7 +501,7 @@ const readSelection = (
           ? output[fieldAlias]
           : input[fieldAlias]) as Data,
         resultValue,
-        ownsData(input)
+        InMemoryData.ownsData(input)
       );
     } else {
       // Otherwise we attempt to get the missing field from the cache
@@ -414,7 +517,7 @@ const readSelection = (
           (output[fieldAlias] !== undefined
             ? output[fieldAlias]
             : input[fieldAlias]) as Data,
-          ownsData(input)
+          InMemoryData.ownsData(input)
         );
       } else if (typeof fieldValue === 'object' && fieldValue !== null) {
         // The entity on the field was invalid but can still be recovered
@@ -425,23 +528,37 @@ const readSelection = (
     // Now that dataFieldValue has been retrieved it'll be set on data
     // If it's uncached (undefined) but nullable we can continue assembling
     // a partial query result
-    if (dataFieldValue === undefined && deferRef.current) {
-      // The field is undelivered and uncached, but is included in a deferred fragment
-      hasFields = true;
-    } else if (
+    if (
+      !deferRef &&
       dataFieldValue === undefined &&
-      ((store.schema && isFieldNullable(store.schema, typename, fieldName)) ||
-        !!getFieldError(ctx))
+      (directives.optional ||
+        (optionalRef && !directives.required) ||
+        !!getFieldError(ctx) ||
+        (!directives.required &&
+          store.schema &&
+          isFieldNullable(store.schema, typename, fieldName, ctx.store.logger)))
     ) {
       // The field is uncached or has errored, so it'll be set to null and skipped
-      hasPartials = true;
+      ctx.partial = true;
       dataFieldValue = null;
-    } else if (dataFieldValue === undefined) {
-      // If the field isn't deferred or partial then we have to abort
-      ctx.__internal.path.pop();
-      return undefined;
+    } else if (
+      dataFieldValue === null &&
+      (directives.required || optionalRef === false)
+    ) {
+      if (
+        ctx.store.logger &&
+        process.env.NODE_ENV !== 'production' &&
+        InMemoryData.currentOperation === 'read'
+      ) {
+        ctx.store.logger(
+          'debug',
+          `Got value "null" for required field "${fieldName}"${
+            fieldArgs ? ` with args ${JSON.stringify(fieldArgs)}` : ''
+          } on entity "${entityKey}"`
+        );
+      }
+      dataFieldValue = undefined;
     } else {
-      // Otherwise continue as usual
       hasFields = hasFields || fieldName !== '__typename';
     }
 
@@ -449,15 +566,37 @@ const readSelection = (
     ctx.__internal.path.pop();
     // Check for any referential changes in the field's value
     hasChanged = hasChanged || dataFieldValue !== input[fieldAlias];
-    if (dataFieldValue !== undefined) output[fieldAlias] = dataFieldValue;
+    if (dataFieldValue !== undefined) {
+      output[fieldAlias] = dataFieldValue;
+    } else if (deferRef) {
+      hasNext = true;
+    } else {
+      if (
+        ctx.store.logger &&
+        process.env.NODE_ENV !== 'production' &&
+        InMemoryData.currentOperation === 'read'
+      ) {
+        ctx.store.logger(
+          'debug',
+          `No value for field "${fieldName}"${
+            fieldArgs ? ` with args ${JSON.stringify(fieldArgs)}` : ''
+          } on entity "${entityKey}"`
+        );
+      }
+      // If the field isn't deferred or partial then we have to abort and also reset
+      // the partial field
+      ctx.partial = hasPartials;
+      return undefined;
+    }
   }
 
   ctx.partial = ctx.partial || hasPartials;
-  return isQuery && hasPartials && !hasFields
+  ctx.hasNext = ctx.hasNext || hasNext;
+  return isQuery && ctx.partial && !hasFields
     ? undefined
     : hasChanged
-    ? output
-    : input;
+      ? output
+      : input;
 };
 
 const resolveResolverResult = (
@@ -465,21 +604,24 @@ const resolveResolverResult = (
   typename: string,
   fieldName: string,
   key: string,
-  select: SelectionSet,
+  select: FormattedNode<SelectionSet>,
   prevData: void | null | Data | Data[],
   result: void | DataField,
-  skipNull: boolean
+  isOwnedData: boolean
 ): DataField | void => {
   if (Array.isArray(result)) {
     const { store } = ctx;
     // Check whether values of the list may be null; for resolvers we assume
     // that they can be, since it's user-provided data
     const _isListNullable = store.schema
-      ? isListNullable(store.schema, typename, fieldName)
+      ? isListNullable(store.schema, typename, fieldName, ctx.store.logger)
       : false;
-    const data = new Array(result.length);
+    const hasPartials = ctx.partial;
+    const data = InMemoryData.makeData(prevData, true);
     let hasChanged =
-      !Array.isArray(prevData) || result.length !== prevData.length;
+      InMemoryData.currentForeignData ||
+      !Array.isArray(prevData) ||
+      result.length !== prevData.length;
     for (let i = 0, l = result.length; i < l; i++) {
       // Add the current index to the walked path before reading the field's value
       ctx.__internal.path.push(i);
@@ -492,12 +634,13 @@ const resolveResolverResult = (
         select,
         prevData != null ? prevData[i] : undefined,
         result[i],
-        skipNull
+        isOwnedData
       );
       // After processing the field, remove the current index from the path
       ctx.__internal.path.pop();
       // Check the result for cache-missed values
       if (childResult === undefined && !_isListNullable) {
+        ctx.partial = hasPartials;
         return undefined;
       } else {
         ctx.partial =
@@ -510,10 +653,10 @@ const resolveResolverResult = (
     return hasChanged ? data : prevData;
   } else if (result === null || result === undefined) {
     return result;
-  } else if (skipNull && prevData === null) {
+  } else if (isOwnedData && prevData === null) {
     return null;
   } else if (isDataOrKey(result)) {
-    const data = (prevData || makeData()) as Data;
+    const data = (prevData || InMemoryData.makeData(prevData)) as Data;
     return typeof result === 'string'
       ? readSelection(ctx, result, select, data)
       : readSelection(ctx, key, select, data, result);
@@ -523,7 +666,8 @@ const resolveResolverResult = (
         key +
         '` is a scalar (number, boolean, etc)' +
         ', but the GraphQL query expects a selection set for this field.',
-      9
+      9,
+      ctx.store.logger
     );
 
     return undefined;
@@ -535,18 +679,21 @@ const resolveLink = (
   link: Link | Link[],
   typename: string,
   fieldName: string,
-  select: SelectionSet,
+  select: FormattedNode<SelectionSet>,
   prevData: void | null | Data | Data[],
-  skipNull: boolean
+  isOwnedData: boolean
 ): DataField | undefined => {
   if (Array.isArray(link)) {
     const { store } = ctx;
     const _isListNullable = store.schema
-      ? isListNullable(store.schema, typename, fieldName)
+      ? isListNullable(store.schema, typename, fieldName, ctx.store.logger)
       : false;
-    const newLink = new Array(link.length);
+    const newLink = InMemoryData.makeData(prevData, true);
+    const hasPartials = ctx.partial;
     let hasChanged =
-      !Array.isArray(prevData) || newLink.length !== prevData.length;
+      InMemoryData.currentForeignData ||
+      !Array.isArray(prevData) ||
+      link.length !== prevData.length;
     for (let i = 0, l = link.length; i < l; i++) {
       // Add the current index to the walked path before reading the field's value
       ctx.__internal.path.push(i);
@@ -558,12 +705,13 @@ const resolveLink = (
         fieldName,
         select,
         prevData != null ? prevData[i] : undefined,
-        skipNull
+        isOwnedData
       );
       // After processing the field, remove the current index from the path
       ctx.__internal.path.pop();
       // Check the result for cache-missed values
       if (childLink === undefined && !_isListNullable) {
+        ctx.partial = hasPartials;
         return undefined;
       } else {
         ctx.partial =
@@ -574,11 +722,16 @@ const resolveLink = (
     }
 
     return hasChanged ? newLink : (prevData as Data[]);
-  } else if (link === null || (prevData === null && skipNull)) {
+  } else if (link === null || (prevData === null && isOwnedData)) {
     return null;
   }
 
-  return readSelection(ctx, link, select, (prevData || makeData()) as Data);
+  return readSelection(
+    ctx,
+    link,
+    select,
+    (prevData || InMemoryData.makeData(prevData)) as Data
+  );
 };
 
 const isDataOrKey = (x: any): x is string | Data =>

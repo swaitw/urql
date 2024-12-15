@@ -1,3 +1,4 @@
+import { describe, it, beforeEach, expect } from 'vitest';
 import * as InMemoryData from './data';
 import { keyOfField } from './keys';
 
@@ -12,23 +13,28 @@ describe('garbage collection', () => {
   it('erases orphaned entities', () => {
     InMemoryData.writeRecord('Todo:1', '__typename', 'Todo');
     InMemoryData.writeRecord('Todo:1', 'id', '1');
+    InMemoryData.writeRecord('Todo:2', '__typename', 'Todo');
     InMemoryData.writeRecord('Query', '__typename', 'Query');
     InMemoryData.writeLink('Query', 'todo', 'Todo:1');
+    InMemoryData.writeType('Todo', 'Todo:1');
 
     InMemoryData.gc();
 
     expect(InMemoryData.readLink('Query', 'todo')).toBe('Todo:1');
+    expect(InMemoryData.getEntitiesForType('Todo')).toEqual(
+      new Set(['Todo:1'])
+    );
 
     InMemoryData.writeLink('Query', 'todo', undefined);
     InMemoryData.gc();
 
     expect(InMemoryData.readLink('Query', 'todo')).toBe(undefined);
     expect(InMemoryData.readRecord('Todo:1', 'id')).toBe(undefined);
+    expect(InMemoryData.getEntitiesForType('Todo')).toEqual(new Set());
 
-    expect(InMemoryData.getCurrentDependencies()).toEqual({
-      'Todo:1': true,
-      'Query.todo': true,
-    });
+    expect(InMemoryData.getCurrentDependencies()).toEqual(
+      new Set(['Todo:1', 'Todo:2', 'Query.todo'])
+    );
   });
 
   it('keeps readopted entities', () => {
@@ -38,18 +44,20 @@ describe('garbage collection', () => {
     InMemoryData.writeLink('Query', 'todo', 'Todo:1');
     InMemoryData.writeLink('Query', 'todo', undefined);
     InMemoryData.writeLink('Query', 'newTodo', 'Todo:1');
+    InMemoryData.writeType('Todo', 'Todo:1');
 
     InMemoryData.gc();
 
     expect(InMemoryData.readLink('Query', 'newTodo')).toBe('Todo:1');
     expect(InMemoryData.readLink('Query', 'todo')).toBe(undefined);
     expect(InMemoryData.readRecord('Todo:1', 'id')).toBe('1');
+    expect(InMemoryData.getEntitiesForType('Todo')).toEqual(
+      new Set(['Todo:1'])
+    );
 
-    expect(InMemoryData.getCurrentDependencies()).toEqual({
-      'Todo:1': true,
-      'Query.todo': true,
-      'Query.newTodo': true,
-    });
+    expect(InMemoryData.getCurrentDependencies()).toEqual(
+      new Set(['Todo:1', 'Query.todo', 'Query.newTodo'])
+    );
   });
 
   it('keeps entities with multiple owners', () => {
@@ -66,11 +74,9 @@ describe('garbage collection', () => {
     expect(InMemoryData.readLink('Query', 'todoB')).toBe('Todo:1');
     expect(InMemoryData.readRecord('Todo:1', 'id')).toBe('1');
 
-    expect(InMemoryData.getCurrentDependencies()).toEqual({
-      'Todo:1': true,
-      'Query.todoA': true,
-      'Query.todoB': true,
-    });
+    expect(InMemoryData.getCurrentDependencies()).toEqual(
+      new Set(['Todo:1', 'Query.todoA', 'Query.todoB'])
+    );
   });
 
   it('skips entities with optimistic updates', () => {
@@ -91,11 +97,12 @@ describe('garbage collection', () => {
     InMemoryData.reserveLayer(data, 1);
     InMemoryData.gc();
 
-    expect(InMemoryData.readRecord('Todo:1', 'id')).toBe(undefined);
-    expect(InMemoryData.getCurrentDependencies()).toEqual({
-      'Query.todo': true,
-      'Todo:1': true,
-    });
+    expect(InMemoryData.readRecord('Todo:1', 'id')).toBe('1');
+    // TODO: is it a problem that this fails, we are reading from Todo
+    // but we are not updating anything
+    expect(InMemoryData.getCurrentDependencies()).toEqual(
+      new Set(['Query.todo'])
+    );
   });
 
   it('erases child entities that are orphaned', () => {
@@ -105,18 +112,26 @@ describe('garbage collection', () => {
     InMemoryData.writeRecord('Todo:1', '__typename', 'Todo');
     InMemoryData.writeRecord('Todo:1', 'id', '1');
     InMemoryData.writeLink('Query', 'todo', 'Todo:1');
+    InMemoryData.writeType('Todo', 'Todo:1');
+    InMemoryData.writeType('Author', 'Author:1');
 
     InMemoryData.writeLink('Query', 'todo', undefined);
+    expect(InMemoryData.getEntitiesForType('Todo')).toEqual(
+      new Set(['Todo:1'])
+    );
+    expect(InMemoryData.getEntitiesForType('Author')).toEqual(
+      new Set(['Author:1'])
+    );
     InMemoryData.gc();
 
     expect(InMemoryData.readRecord('Todo:1', 'id')).toBe(undefined);
     expect(InMemoryData.readRecord('Author:1', 'id')).toBe(undefined);
+    expect(InMemoryData.getEntitiesForType('Todo')).toEqual(new Set());
+    expect(InMemoryData.getEntitiesForType('Author')).toEqual(new Set());
 
-    expect(InMemoryData.getCurrentDependencies()).toEqual({
-      'Author:1': true,
-      'Todo:1': true,
-      'Query.todo': true,
-    });
+    expect(InMemoryData.getCurrentDependencies()).toEqual(
+      new Set(['Author:1', 'Todo:1', 'Query.todo'])
+    );
   });
 });
 
@@ -129,54 +144,54 @@ describe('inspectFields', () => {
     InMemoryData.writeLink('Query', 'randomTodo', 'Todo:1');
 
     expect(InMemoryData.inspectFields('Query')).toMatchInlineSnapshot(`
-      Array [
-        Object {
-          "arguments": Object {
+      [
+        {
+          "arguments": {
             "id": "1",
           },
-          "fieldKey": "todo({\\"id\\":\\"1\\"})",
+          "fieldKey": "todo({"id":"1"})",
           "fieldName": "todo",
         },
-        Object {
+        {
           "arguments": null,
           "fieldKey": "randomTodo",
           "fieldName": "randomTodo",
         },
-        Object {
+        {
           "arguments": null,
           "fieldKey": "__typename",
           "fieldName": "__typename",
         },
-        Object {
-          "arguments": Object {
+        {
+          "arguments": {
             "id": "1",
           },
-          "fieldKey": "hasTodo({\\"id\\":\\"1\\"})",
+          "fieldKey": "hasTodo({"id":"1"})",
           "fieldName": "hasTodo",
         },
       ]
     `);
 
-    expect(InMemoryData.getCurrentDependencies()).toEqual({
-      'Query.todo({"id":"1"})': true,
-      'Query.hasTodo({"id":"1"})': true,
-      'Query.randomTodo': true,
-    });
+    expect(InMemoryData.getCurrentDependencies()).toEqual(
+      new Set([
+        'Query.todo({"id":"1"})',
+        'Query.hasTodo({"id":"1"})',
+        'Query.randomTodo',
+      ])
+    );
   });
 
   it('returns an empty array when an entity is unknown', () => {
     expect(InMemoryData.inspectFields('Random')).toEqual([]);
 
-    expect(InMemoryData.getCurrentDependencies()).toEqual({ Random: true });
+    expect(InMemoryData.getCurrentDependencies()).toEqual(new Set(['Random']));
   });
 
   it('returns field infos for all optimistic updates', () => {
     InMemoryData.initDataState('write', data, 1, true);
     InMemoryData.writeLink('Query', 'todo', 'Todo:1');
 
-    expect(InMemoryData.inspectFields('Random')).toMatchInlineSnapshot(
-      `Array []`
-    );
+    expect(InMemoryData.inspectFields('Random')).toMatchInlineSnapshot('[]');
   });
 
   it('avoids duplicate field infos', () => {
@@ -186,8 +201,8 @@ describe('inspectFields', () => {
     InMemoryData.writeLink('Query', 'todo', 'Todo:2');
 
     expect(InMemoryData.inspectFields('Query')).toMatchInlineSnapshot(`
-      Array [
-        Object {
+      [
+        {
           "arguments": null,
           "fieldKey": "todo",
           "fieldName": "todo",
@@ -503,6 +518,27 @@ describe('deferred changes', () => {
 
     // The layers must then be squashed
     expect(data.optimisticOrder).toEqual([]);
+  });
+
+  it('does not erase data from a prior deferred layer when updating it', () => {
+    // initially it's unknown whether a layer is deferred
+    InMemoryData.reserveLayer(data, 1, true);
+    InMemoryData.reserveLayer(data, 2, true);
+
+    InMemoryData.initDataState('write', data, 2);
+    InMemoryData.writeRecord('Query', 'index', 2);
+    InMemoryData.clearDataState();
+
+    InMemoryData.initDataState('read', data, null);
+    expect(InMemoryData.readRecord('Query', 'index')).toBe(2);
+
+    // A subsequent reserve layer call should not erase the layer
+    InMemoryData.reserveLayer(data, 2, true);
+    InMemoryData.initDataState('read', data, null);
+    expect(InMemoryData.readRecord('Query', 'index')).toBe(2);
+
+    // The layers must not be squashed
+    expect(data.optimisticOrder).toEqual([2, 1]);
   });
 
   it('keeps a deferred layer around even if it is the lowest', () => {

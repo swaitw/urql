@@ -1,340 +1,415 @@
-import {
+import type {
   Exchange,
-  formatDocument,
-  makeOperation,
   Operation,
   OperationResult,
   RequestPolicy,
   CacheOutcome,
 } from '@urql/core';
+import { formatDocument, makeOperation } from '@urql/core';
 
+import type { Source } from 'wonka';
 import {
   filter,
   map,
   merge,
   pipe,
   share,
-  fromPromise,
   fromArray,
   mergeMap,
   empty,
-  Source,
-  skipUntil,
-  buffer,
 } from 'wonka';
 
-import { query, write, writeOptimistic } from './operations';
-import { makeDict, isDictEmpty } from './helpers/dict';
-import { addCacheOutcome, toRequestPolicy } from './helpers/operation';
+import { _query } from './operations/query';
+import { _write } from './operations/write';
+import { addMetadata, toRequestPolicy } from './helpers/operation';
 import { filterVariables, getMainOperation } from './ast';
-import { Store, noopDataState, hydrateData, reserveLayer } from './store';
-import { Data, Dependencies, CacheExchangeOpts } from './types';
+import { Store } from './store/store';
+import type { Data, Dependencies, CacheExchangeOpts } from './types';
 
-type OperationResultWithMeta = OperationResult & {
+import {
+  initDataState,
+  clearDataState,
+  noopDataState,
+  hydrateData,
+  reserveLayer,
+  hasLayer,
+} from './store/data';
+
+interface OperationResultWithMeta extends Partial<OperationResult> {
+  operation: Operation;
   outcome: CacheOutcome;
   dependencies: Dependencies;
-};
+  hasNext: boolean;
+}
 
 type Operations = Set<number>;
 type OperationMap = Map<number, Operation>;
 type ResultMap = Map<number, Data | null>;
 type OptimisticDependencies = Map<number, Dependencies>;
-type DependentOperations = Record<string, number[]>;
+type DependentOperations = Map<string, Operations>;
 
-export const cacheExchange = <C extends Partial<CacheExchangeOpts>>(
-  opts?: C
-): Exchange => ({ forward, client, dispatchDebug }) => {
-  const store = new Store<C>(opts);
+/** Exchange factory that creates a normalized cache exchange.
+ *
+ * @param opts - A {@link CacheExchangeOpts} configuration object.
+ * @returns the created normalized cache {@link Exchange}.
+ *
+ * @remarks
+ * Graphcache is a normalized cache, enabled by using the `cacheExchange`
+ * in place of `@urql/core`’s. A normalized GraphQL cache uses typenames
+ * and key fields in the result to share a single copy for each unique
+ * entity across all queries.
+ *
+ * The `cacheExchange` may be passed a {@link CacheExchangeOpts} object
+ * to define custom resolvers, custom updates for mutations,
+ * optimistic updates, or to add custom key fields per type.
+ *
+ * @see {@link https://urql.dev/goto/docs/graphcache} for the full Graphcache docs.
+ */
+export const cacheExchange =
+  <C extends Partial<CacheExchangeOpts>>(opts?: C): Exchange =>
+  ({ forward, client, dispatchDebug }) => {
+    const store = new Store<C>(opts);
 
-  let hydration: void | Promise<void>;
-  if (opts && opts.storage) {
-    hydration = opts.storage.readData().then(entries => {
-      hydrateData(store.data, opts!.storage!, entries);
-    });
-  }
-
-  const optimisticKeysToDependencies: OptimisticDependencies = new Map();
-  const mutationResultBuffer: OperationResult[] = [];
-  const operations: OperationMap = new Map();
-  const results: ResultMap = new Map();
-  const blockedDependencies: Dependencies = makeDict();
-  const requestedRefetch: Operations = new Set();
-  const deps: DependentOperations = makeDict();
-
-  const isBlockedByOptimisticUpdate = (dependencies: Dependencies): boolean => {
-    for (const dep in dependencies) if (blockedDependencies[dep]) return true;
-    return false;
-  };
-
-  const collectPendingOperations = (
-    pendingOperations: Operations,
-    dependencies: void | Dependencies
-  ) => {
-    if (dependencies) {
-      // Collect operations that will be updated due to cache changes
-      for (const dep in dependencies) {
-        const keys = deps[dep];
-        if (keys) {
-          deps[dep] = [];
-          for (let i = 0, l = keys.length; i < l; i++) {
-            pendingOperations.add(keys[i]);
-          }
-        }
-      }
-    }
-  };
-
-  const executePendingOperations = (
-    operation: Operation,
-    pendingOperations: Operations
-  ) => {
-    // Reexecute collected operations and delete them from the mapping
-    pendingOperations.forEach(key => {
-      if (key !== operation.key) {
-        const op = operations.get(key);
-        if (op) {
-          operations.delete(key);
-          let policy: RequestPolicy = 'cache-first';
-          if (requestedRefetch.has(key)) {
-            requestedRefetch.delete(key);
-            policy = 'cache-and-network';
-          }
-          client.reexecuteOperation(toRequestPolicy(op, policy));
-        }
-      }
-    });
-  };
-
-  // This registers queries with the data layer to ensure commutativity
-  const prepareForwardedOperation = (operation: Operation) => {
-    if (operation.kind === 'query') {
-      // Pre-reserve the position of the result layer
-      reserveLayer(store.data, operation.key);
-    } else if (operation.kind === 'teardown') {
-      // Delete reference to operation if any exists to release it
-      operations.delete(operation.key);
-      results.delete(operation.key);
-      // Mark operation layer as done
-      noopDataState(store.data, operation.key);
-    } else if (
-      operation.kind === 'mutation' &&
-      operation.context.requestPolicy !== 'network-only'
-    ) {
-      // This executes an optimistic update for mutations and registers it if necessary
-      const { dependencies } = writeOptimistic(store, operation, operation.key);
-      if (!isDictEmpty(dependencies)) {
-        // Update blocked optimistic dependencies
-        for (const dep in dependencies) {
-          blockedDependencies[dep] = true;
-        }
-
-        // Store optimistic dependencies for update
-        optimisticKeysToDependencies.set(operation.key, dependencies);
-
-        // Update related queries
-        const pendingOperations: Operations = new Set();
-        collectPendingOperations(pendingOperations, dependencies);
-        executePendingOperations(operation, pendingOperations);
-      }
+    if (opts && opts.storage) {
+      store.data.hydrating = true;
+      opts.storage.readData().then(entries => {
+        hydrateData(store.data, opts!.storage!, entries);
+        if (opts.storage!.onCacheHydrated) opts.storage!.onCacheHydrated();
+      });
     }
 
-    return makeOperation(
-      operation.kind,
-      {
-        key: operation.key,
-        query: formatDocument(operation.query),
-        variables: operation.variables
-          ? filterVariables(
-              getMainOperation(operation.query),
-              operation.variables
-            )
-          : operation.variables,
-      },
-      operation.context
-    );
-  };
+    const optimisticKeysToDependencies: OptimisticDependencies = new Map();
+    const mutationResultBuffer: OperationResult[] = [];
+    const operations: OperationMap = new Map();
+    const results: ResultMap = new Map();
+    const blockedDependencies: Dependencies = new Set();
+    const requestedRefetch: Operations = new Set();
+    const deps: DependentOperations = new Map();
 
-  // This updates the known dependencies for the passed operation
-  const updateDependencies = (op: Operation, dependencies: Dependencies) => {
-    for (const dep in dependencies) {
-      (deps[dep] || (deps[dep] = [])).push(op.key);
-      operations.set(op.key, op);
-    }
-  };
+    let reexecutingOperations: Operations = new Set();
+    let dependentOperations: Operations = new Set();
 
-  // Retrieves a query result from cache and adds an `isComplete` hint
-  // This hint indicates whether the result is "complete" or not
-  const operationResultFromCache = (
-    operation: Operation
-  ): OperationResultWithMeta => {
-    const result = query(store, operation, results.get(operation.key));
-    const cacheOutcome: CacheOutcome = result.data
-      ? !result.partial
-        ? 'hit'
-        : 'partial'
-      : 'miss';
-
-    results.set(operation.key, result.data);
-    updateDependencies(operation, result.dependencies);
-
-    return {
-      outcome: cacheOutcome,
-      operation,
-      data: result.data,
-      dependencies: result.dependencies,
+    const isBlockedByOptimisticUpdate = (
+      dependencies: Dependencies
+    ): boolean => {
+      for (const dep of dependencies.values())
+        if (blockedDependencies.has(dep)) return true;
+      return false;
     };
-  };
 
-  // Take any OperationResult and update the cache with it
-  const updateCacheWithResult = (
-    result: OperationResult,
-    pendingOperations: Operations
-  ): OperationResult => {
-    const { operation, error, extensions } = result;
-    const { key } = operation;
+    const collectPendingOperations = (
+      pendingOperations: Operations,
+      dependencies: undefined | Dependencies
+    ) => {
+      if (dependencies) {
+        // Collect operations that will be updated due to cache changes
+        for (const dep of dependencies.values()) {
+          const keys = deps.get(dep);
+          if (keys) for (const key of keys.values()) pendingOperations.add(key);
+        }
+      }
+    };
 
-    if (operation.kind === 'mutation') {
-      // Collect previous dependencies that have been written for optimistic updates
-      const dependencies = optimisticKeysToDependencies.get(key);
-      collectPendingOperations(pendingOperations, dependencies);
-      optimisticKeysToDependencies.delete(key);
-    }
+    const executePendingOperations = (
+      operation: Operation,
+      pendingOperations: Operations,
+      isOptimistic: boolean
+    ) => {
+      // Reexecute collected operations and delete them from the mapping
+      for (const key of pendingOperations.values()) {
+        if (key !== operation.key) {
+          const op = operations.get(key);
+          if (op) {
+            // Collect all dependent operations if the reexecuting operation is a query
+            if (operation.kind === 'query') dependentOperations.add(key);
+            let policy: RequestPolicy = 'cache-first';
+            if (requestedRefetch.has(key)) {
+              requestedRefetch.delete(key);
+              policy = 'cache-and-network';
+            }
+            client.reexecuteOperation(toRequestPolicy(op, policy));
+          }
+        }
+      }
 
-    reserveLayer(
-      store.data,
-      operation.key,
-      operation.kind === 'subscription' || result.hasNext
-    );
+      if (!isOptimistic) {
+        // Upon completion, all dependent operations become reexecuting operations, preventing
+        // them from reexecuting prior operations again, causing infinite loops
+        const _reexecutingOperations = reexecutingOperations;
+        reexecutingOperations = dependentOperations;
+        if (operation.kind === 'query') {
+          reexecutingOperations.add(operation.key);
+        }
+        (dependentOperations = _reexecutingOperations).clear();
+      }
+    };
 
-    let queryDependencies: void | Dependencies;
-    let data: Data | null = result.data;
-    if (data) {
-      // Write the result to cache and collect all dependencies that need to be
-      // updated
-      const writeDependencies = write(store, operation, data, result.error, key)
-        .dependencies;
-      collectPendingOperations(pendingOperations, writeDependencies);
+    // This registers queries with the data layer to ensure commutativity
+    const prepareForwardedOperation = (operation: Operation) => {
+      let optimistic = false;
+      if (operation.kind === 'query') {
+        // Pre-reserve the position of the result layer
+        reserveLayer(store.data, operation.key);
+        operations.set(operation.key, operation);
+      } else if (operation.kind === 'teardown') {
+        // Delete reference to operation if any exists to release it
+        operations.delete(operation.key);
+        results.delete(operation.key);
+        reexecutingOperations.delete(operation.key);
+        // Mark operation layer as done
+        noopDataState(store.data, operation.key);
+        return operation;
+      } else if (
+        operation.kind === 'mutation' &&
+        operation.context.requestPolicy !== 'network-only'
+      ) {
+        operations.set(operation.key, operation);
+        // This executes an optimistic update for mutations and registers it if necessary
+        initDataState('write', store.data, operation.key, true, false);
+        const { dependencies } = _write(
+          store,
+          operation as any,
+          undefined,
+          undefined
+        );
+        clearDataState();
+        if (dependencies.size) {
+          // Update blocked optimistic dependencies
+          for (const dep of dependencies.values()) blockedDependencies.add(dep);
+          // Store optimistic dependencies for update
+          optimisticKeysToDependencies.set(operation.key, dependencies);
+          // Update related queries
+          const pendingOperations: Operations = new Set();
+          collectPendingOperations(pendingOperations, dependencies);
+          executePendingOperations(operation, pendingOperations, true);
+          // Mark operation as optimistic
+          optimistic = true;
+        }
+      }
 
-      const queryResult = query(
+      return makeOperation(
+        operation.kind,
+        {
+          key: operation.key,
+          query: formatDocument(operation.query),
+          variables: operation.variables
+            ? filterVariables(
+                getMainOperation(operation.query),
+                operation.variables
+              )
+            : operation.variables,
+        },
+        { ...operation.context, optimistic }
+      );
+    };
+
+    // This updates the known dependencies for the passed operation
+    const updateDependencies = (op: Operation, dependencies: Dependencies) => {
+      for (const dep of dependencies.values()) {
+        let depOps = deps.get(dep);
+        if (!depOps) deps.set(dep, (depOps = new Set()));
+        depOps.add(op.key);
+      }
+    };
+
+    // Retrieves a query result from cache and adds an `isComplete` hint
+    // This hint indicates whether the result is "complete" or not
+    const operationResultFromCache = (
+      operation: Operation
+    ): OperationResultWithMeta => {
+      initDataState('read', store.data, undefined, false, false);
+      const result = _query(
         store,
         operation,
-        operation.kind === 'query' ? results.get(operation.key) || data : data,
-        result.error,
-        key
+        results.get(operation.key),
+        undefined
+      );
+      clearDataState();
+      const cacheOutcome: CacheOutcome = result.data
+        ? !result.partial && !result.hasNext
+          ? 'hit'
+          : 'partial'
+        : 'miss';
+
+      results.set(operation.key, result.data);
+      operations.set(operation.key, operation);
+      updateDependencies(operation, result.dependencies);
+
+      return {
+        outcome: cacheOutcome,
+        operation,
+        data: result.data,
+        dependencies: result.dependencies,
+        hasNext: result.hasNext,
+      };
+    };
+
+    // Take any OperationResult and update the cache with it
+    const updateCacheWithResult = (
+      result: OperationResult,
+      pendingOperations: Operations
+    ): OperationResult => {
+      // Retrieve the original operation to get unfiltered variables
+      const operation =
+        operations.get(result.operation.key) || result.operation;
+      if (operation.kind === 'mutation') {
+        // Collect previous dependencies that have been written for optimistic updates
+        const dependencies = optimisticKeysToDependencies.get(operation.key);
+        collectPendingOperations(pendingOperations, dependencies);
+        optimisticKeysToDependencies.delete(operation.key);
+      }
+
+      if (operation.kind === 'subscription' || result.hasNext)
+        reserveLayer(store.data, operation.key, true);
+
+      let queryDependencies: undefined | Dependencies;
+      let data: Data | null = result.data;
+      if (data) {
+        // Write the result to cache and collect all dependencies that need to be
+        // updated
+        initDataState('write', store.data, operation.key, false, false);
+        const writeDependencies = _write(
+          store,
+          operation,
+          data,
+          result.error
+        ).dependencies;
+        clearDataState();
+        collectPendingOperations(pendingOperations, writeDependencies);
+        const prevData =
+          operation.kind === 'query' ? results.get(operation.key) : null;
+        initDataState(
+          'read',
+          store.data,
+          operation.key,
+          false,
+          prevData !== data
+        );
+        const queryResult = _query(
+          store,
+          operation,
+          prevData || data,
+          result.error
+        );
+        clearDataState();
+        data = queryResult.data;
+        if (operation.kind === 'query') {
+          // Collect the query's dependencies for future pending operation updates
+          queryDependencies = queryResult.dependencies;
+          collectPendingOperations(pendingOperations, queryDependencies);
+          results.set(operation.key, data);
+        }
+      } else {
+        noopDataState(store.data, operation.key);
+      }
+
+      // Update this operation's dependencies if it's a query
+      if (queryDependencies) {
+        updateDependencies(result.operation, queryDependencies);
+      }
+
+      return {
+        operation,
+        data,
+        error: result.error,
+        extensions: result.extensions,
+        hasNext: result.hasNext,
+        stale: result.stale,
+      };
+    };
+
+    return operations$ => {
+      // Filter by operations that are cacheable and attempt to query them from the cache
+      const cacheOps$ = pipe(
+        operations$,
+        filter(
+          op =>
+            op.kind === 'query' && op.context.requestPolicy !== 'network-only'
+        ),
+        map(operationResultFromCache),
+        share
       );
 
-      data = queryResult.data;
-      if (operation.kind === 'query') {
-        // Collect the query's dependencies for future pending operation updates
-        queryDependencies = queryResult.dependencies;
-        collectPendingOperations(pendingOperations, queryDependencies);
-        results.set(operation.key, result.data);
-      }
-    } else {
-      noopDataState(store.data, operation.key);
-    }
-
-    // Update this operation's dependencies if it's a query
-    if (queryDependencies) {
-      updateDependencies(result.operation, queryDependencies);
-    }
-
-    return { data, error, extensions, operation };
-  };
-
-  return ops$ => {
-    const sharedOps$ = pipe(ops$, share);
-
-    // Buffer operations while waiting on hydration to finish
-    // If no hydration takes place we replace this stream with an empty one
-    const inputOps$ = hydration
-      ? share(
-          merge([
-            pipe(
-              sharedOps$,
-              buffer(fromPromise(hydration)),
-              mergeMap(fromArray)
-            ),
-            pipe(sharedOps$, skipUntil(fromPromise(hydration))),
-          ])
+      const nonCacheOps$ = pipe(
+        operations$,
+        filter(
+          op =>
+            op.kind !== 'query' || op.context.requestPolicy === 'network-only'
         )
-      : sharedOps$;
+      );
 
-    // Filter by operations that are cacheable and attempt to query them from the cache
-    const cacheOps$ = pipe(
-      inputOps$,
-      filter(op => {
-        return (
-          op.kind === 'query' && op.context.requestPolicy !== 'network-only'
-        );
-      }),
-      map(operationResultFromCache),
-      share
-    );
+      // Rebound operations that are incomplete, i.e. couldn't be queried just from the cache
+      const cacheMissOps$ = pipe(
+        cacheOps$,
+        filter(
+          res =>
+            res.outcome === 'miss' &&
+            res.operation.context.requestPolicy !== 'cache-only' &&
+            !isBlockedByOptimisticUpdate(res.dependencies) &&
+            !reexecutingOperations.has(res.operation.key)
+        ),
+        map(res => {
+          dispatchDebug({
+            type: 'cacheMiss',
+            message: 'The result could not be retrieved from the cache',
+            operation: res.operation,
+          });
+          return addMetadata(res.operation, { cacheOutcome: 'miss' });
+        })
+      );
 
-    const nonCacheOps$ = pipe(
-      inputOps$,
-      filter(op => {
-        return (
-          op.kind !== 'query' || op.context.requestPolicy === 'network-only'
-        );
-      })
-    );
+      // Resolve OperationResults that the cache was able to assemble completely and trigger
+      // a network request if the current operation's policy is cache-and-network
+      const cacheResult$ = pipe(
+        cacheOps$,
+        filter(
+          res =>
+            res.outcome !== 'miss' ||
+            res.operation.context.requestPolicy === 'cache-only'
+        ),
+        map((res: OperationResultWithMeta): OperationResult => {
+          const { requestPolicy } = res.operation.context;
 
-    // Rebound operations that are incomplete, i.e. couldn't be queried just from the cache
-    const cacheMissOps$ = pipe(
-      cacheOps$,
-      filter(res => {
-        return (
-          res.outcome === 'miss' &&
-          res.operation.context.requestPolicy !== 'cache-only' &&
-          !isBlockedByOptimisticUpdate(res.dependencies)
-        );
-      }),
-      map(res => {
-        dispatchDebug({
-          type: 'cacheMiss',
-          message: 'The result could not be retrieved from the cache',
-          operation: res.operation,
-        });
-        return addCacheOutcome(res.operation, 'miss');
-      })
-    );
+          // We reexecute requests marked as `cache-and-network`, and partial responses,
+          // if we wouldn't cause a request loop
+          const shouldReexecute =
+            requestPolicy !== 'cache-only' &&
+            (res.hasNext ||
+              requestPolicy === 'cache-and-network' ||
+              (requestPolicy === 'cache-first' &&
+                res.outcome === 'partial' &&
+                !reexecutingOperations.has(res.operation.key)));
+          // Set stale to true anyway, even if the reexecute will be blocked, if the operation
+          // is in progress. We can be reasonably sure of that if a layer has been reserved for it.
+          const stale =
+            requestPolicy !== 'cache-only' &&
+            (shouldReexecute ||
+              (res.outcome === 'partial' &&
+                reexecutingOperations.has(res.operation.key) &&
+                hasLayer(store.data, res.operation.key)));
 
-    // Resolve OperationResults that the cache was able to assemble completely and trigger
-    // a network request if the current operation's policy is cache-and-network
-    const cacheResult$ = pipe(
-      cacheOps$,
-      filter(
-        res =>
-          res.outcome !== 'miss' ||
-          res.operation.context.requestPolicy === 'cache-only'
-      ),
-      map(
-        (res: OperationResultWithMeta): OperationResult => {
-          const { operation, outcome, dependencies } = res;
           const result: OperationResult = {
-            operation: addCacheOutcome(operation, outcome),
+            operation: addMetadata(res.operation, {
+              cacheOutcome: res.outcome,
+            }),
             data: res.data,
             error: res.error,
             extensions: res.extensions,
+            stale: stale && !res.hasNext,
+            hasNext: shouldReexecute && res.hasNext,
           };
 
-          if (
-            operation.context.requestPolicy === 'cache-and-network' ||
-            (operation.context.requestPolicy === 'cache-first' &&
-              outcome === 'partial')
-          ) {
-            result.stale = true;
-            if (!isBlockedByOptimisticUpdate(dependencies)) {
-              client.reexecuteOperation(
-                toRequestPolicy(operation, 'network-only')
-              );
-            } else if (
-              operation.context.requestPolicy === 'cache-and-network'
-            ) {
-              requestedRefetch.add(operation.key);
-            }
+          if (!shouldReexecute) {
+            /*noop*/
+          } else if (!isBlockedByOptimisticUpdate(res.dependencies)) {
+            client.reexecuteOperation(
+              toRequestPolicy(
+                operations.get(res.operation.key) || res.operation,
+                'network-only'
+              )
+            );
+          } else if (requestPolicy === 'cache-and-network') {
+            requestedRefetch.add(res.operation.key);
           }
 
           dispatchDebug({
@@ -347,40 +422,41 @@ export const cacheExchange = <C extends Partial<CacheExchangeOpts>>(
           });
 
           return result;
-        }
-      )
-    );
+        })
+      );
 
-    // Forward operations that aren't cacheable and rebound operations
-    // Also update the cache with any network results
-    const result$ = pipe(
-      merge([nonCacheOps$, cacheMissOps$]),
-      map(prepareForwardedOperation),
-      forward,
-      share
-    );
+      // Forward operations that aren't cacheable and rebound operations
+      // Also update the cache with any network results
+      const result$ = pipe(
+        merge([nonCacheOps$, cacheMissOps$]),
+        map(prepareForwardedOperation),
+        forward
+      );
 
-    // Results that can immediately be resolved
-    const nonOptimisticResults$ = pipe(
-      result$,
-      filter(result => !optimisticKeysToDependencies.has(result.operation.key)),
-      map(result => {
-        const pendingOperations: Operations = new Set();
-        // Update the cache with the incoming API result
-        const cacheResult = updateCacheWithResult(result, pendingOperations);
-        // Execute all dependent queries
-        executePendingOperations(result.operation, pendingOperations);
-        return cacheResult;
-      })
-    );
+      // Results that can immediately be resolved
+      const nonOptimisticResults$ = pipe(
+        result$,
+        filter(
+          result => !optimisticKeysToDependencies.has(result.operation.key)
+        ),
+        map(result => {
+          const pendingOperations: Operations = new Set();
+          // Update the cache with the incoming API result
+          const cacheResult = updateCacheWithResult(result, pendingOperations);
+          // Execute all dependent queries
+          executePendingOperations(result.operation, pendingOperations, false);
+          return cacheResult;
+        })
+      );
 
-    // Prevent mutations that were previously optimistic from being flushed
-    // immediately and instead clear them out slowly
-    const optimisticMutationCompletion$ = pipe(
-      result$,
-      filter(result => optimisticKeysToDependencies.has(result.operation.key)),
-      mergeMap(
-        (result: OperationResult): Source<OperationResult> => {
+      // Prevent mutations that were previously optimistic from being flushed
+      // immediately and instead clear them out slowly
+      const optimisticMutationCompletion$ = pipe(
+        result$,
+        filter(result =>
+          optimisticKeysToDependencies.has(result.operation.key)
+        ),
+        mergeMap((result: OperationResult): Source<OperationResult> => {
           const length = mutationResultBuffer.push(result);
           if (length < optimisticKeysToDependencies.size) {
             return empty;
@@ -390,9 +466,7 @@ export const cacheExchange = <C extends Partial<CacheExchangeOpts>>(
             reserveLayer(store.data, mutationResultBuffer[i].operation.key);
           }
 
-          for (const dep in blockedDependencies) {
-            delete blockedDependencies[dep];
-          }
+          blockedDependencies.clear();
 
           const results: OperationResult[] = [];
           const pendingOperations: Operations = new Set();
@@ -404,17 +478,16 @@ export const cacheExchange = <C extends Partial<CacheExchangeOpts>>(
             );
 
           // Execute all dependent queries as a single batch
-          executePendingOperations(result.operation, pendingOperations);
+          executePendingOperations(result.operation, pendingOperations, false);
 
           return fromArray(results);
-        }
-      )
-    );
+        })
+      );
 
-    return merge([
-      nonOptimisticResults$,
-      optimisticMutationCompletion$,
-      cacheResult$,
-    ]);
+      return merge([
+        nonOptimisticResults$,
+        optimisticMutationCompletion$,
+        cacheResult$,
+      ]);
+    };
   };
-};

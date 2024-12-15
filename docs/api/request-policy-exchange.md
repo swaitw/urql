@@ -5,6 +5,11 @@ order: 9
 
 # Request Policy Exchange
 
+> **Note:** These API docs are deprecated as we now keep TSDocs in all published packages.
+> You can view TSDocs while using these packages in your editor, as long as it supports the
+> TypeScript Language Server.
+> We're planning to replace these API docs with a separate web app soon.
+
 The `@urql/exchange-request-policy` package contains an addon `requestPolicyExchange` for `urql`
 that may be used to upgrade [Operations' Request Policies](./core.md#requestpolicy) on a
 time-to-live basis.
@@ -27,17 +32,16 @@ yarn add @urql/exchange-request-policy
 npm install --save @urql/exchange-request-policy
 ```
 
-Then add it to your `Client`, preferably after the `dedupExchange` but in front of any asynchronous
-exchanges, like the `fetchExchang`:
+Then add it to your `Client`, preferably in front of the `cacheExchange` and in front of any asynchronous
+exchanges, like the `fetchExchange`:
 
 ```js
-import { createClient, dedupExchange, cacheExchange, fetchExchange } from 'urql';
+import { createClient, cacheExchange, fetchExchange } from 'urql';
 import { requestPolicyExchange } from '@urql/exchange-request-policy';
 
 const client = createClient({
-  url: '/graphql',
+  url: 'http://localhost:3000/graphql',
   exchanges: [
-    dedupExchange,
     requestPolicyExchange({
       /* config */
     }),

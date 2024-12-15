@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-
 import { minifyIntrospectionQuery } from '@urql/introspection';
-import { formatDocument, gql, maskTypename } from '@urql/core';
+import { formatDocument, gql } from '@urql/core';
+import { vi, expect, it, beforeEach, describe } from 'vitest';
 
 import {
   executeSync,
@@ -12,11 +12,15 @@ import {
 
 import { Data, StorageAdapter } from '../types';
 import { makeContext, updateContext } from '../operations/shared';
-import { query } from '../operations/query';
-import { write, writeOptimistic } from '../operations/write';
 import * as InMemoryData from './data';
 import { Store } from './store';
 import { noop } from '../test-utils/utils';
+
+import { __initAnd_query as query } from '../operations/query';
+import {
+  __initAnd_write as write,
+  __initAnd_writeOptimistic as writeOptimistic,
+} from '../operations/write';
 
 const mocked = (x: any): any => x;
 
@@ -98,7 +102,26 @@ describe('Store', () => {
     write(store, { query: TodosWithoutTypename }, todosData);
     const result = query(store, { query: TodosWithoutTypename });
     expect(result.data).toEqual({
-      ...maskTypename(todosData),
+      todos: [
+        {
+          id: '0',
+          text: 'Go to the shops',
+          complete: false,
+          author: { id: '0', name: 'Jovi' },
+        },
+        {
+          id: '1',
+          text: 'Pick up the kids',
+          complete: true,
+          author: { id: '1', name: 'Phil' },
+        },
+        {
+          id: '2',
+          text: 'Install urql',
+          complete: false,
+          author: { id: '0', name: 'Jovi' },
+        },
+      ],
       __typename: 'Query',
     });
   });
@@ -121,13 +144,6 @@ describe('Store with UpdatesConfig', () => {
 
     expect(store.updates.Mutation).toBe(updatesOption.Mutation);
     expect(store.updates.Subscription).toBe(updatesOption.Subscription);
-  });
-
-  it("sets the store's updates field to an empty default if not provided", () => {
-    const store = new Store({});
-
-    expect(store.updates.Mutation).toEqual({});
-    expect(store.updates.Subscription).toEqual({});
   });
 
   it('should not warn if Mutation/Subscription operations do exist in the schema', function () {
@@ -163,9 +179,9 @@ describe('Store with UpdatesConfig', () => {
     expect(console.warn).toBeCalledTimes(1);
     const warnMessage = mocked(console.warn).mock.calls[0][0];
     expect(warnMessage).toContain(
-      'Invalid mutation field: `doTheChaChaSlide` is not in the defined schema, but the `updates.Mutation` option is referencing it.'
+      'Invalid updates field: `doTheChaChaSlide` on `Mutation` is not in the defined schema'
     );
-    expect(warnMessage).toContain('https://bit.ly/2XbVrpR#21');
+    expect(warnMessage).toContain('https://bit.ly/2XbVrpR#22');
   });
 
   it("should warn if Subscription operations don't exist in the schema", function () {
@@ -183,7 +199,7 @@ describe('Store with UpdatesConfig', () => {
     expect(console.warn).toBeCalledTimes(1);
     const warnMessage = mocked(console.warn).mock.calls[0][0];
     expect(warnMessage).toContain(
-      'Invalid subscription field: `someoneDidTheChaChaSlide` is not in the defined schema, but the `updates.Subscription` option is referencing it.'
+      'Invalid updates field: `someoneDidTheChaChaSlide` on `Subscription` is not in the defined schema'
     );
     expect(warnMessage).toContain('https://bit.ly/2XbVrpR#22');
   });
@@ -237,6 +253,20 @@ describe('Store with KeyingConfig', () => {
       'The type `NotInSchema` is not an object in the defined schema, but the `keys` option is referencing it'
     );
     expect(warnMessage).toContain('https://bit.ly/2XbVrpR#20');
+  });
+});
+
+describe('Store with Global IDs', () => {
+  it('generates keys without typenames when set to true', () => {
+    const store = new Store({ globalIDs: true });
+    expect(store.keyOfEntity({ __typename: 'Any', id: '123' })).toBe('123');
+    expect(store.keyOfEntity({ __typename: 'None', id: '123' })).toBe('123');
+  });
+
+  it('generates keys without typenames when matching an input set', () => {
+    const store = new Store({ globalIDs: ['User'] });
+    expect(store.keyOfEntity({ __typename: 'Any', id: '123' })).toBe('Any:123');
+    expect(store.keyOfEntity({ __typename: 'User', id: '123' })).toBe('123');
   });
 });
 
@@ -385,7 +415,7 @@ describe('Store with OptimisticMutationConfig', () => {
       },
     });
 
-    context = makeContext(store, {}, {}, 'Query', 'Query');
+    context = makeContext(store, {}, {}, 'Query', 'Query', undefined);
     write(store, { query: Todos }, todosData);
     InMemoryData.initDataState('read', store.data, null);
   });
@@ -402,7 +432,7 @@ describe('Store with OptimisticMutationConfig', () => {
     expect(result).toEqual('Go to the shops');
     // TODO: we have no way of asserting this to really be the case.
     const deps = InMemoryData.getCurrentDependencies();
-    expect(deps).toEqual({ 'Todo:0': true, 'Author:0': true });
+    expect(deps).toEqual(new Set(['Todo:0', 'Author:0']));
     InMemoryData.clearDataState();
   });
 
@@ -414,7 +444,7 @@ describe('Store with OptimisticMutationConfig', () => {
       randomData,
       'Todo',
       'Todo:1',
-      'Todo:1.createdAt',
+      'createdAt',
       'createdAt'
     );
 
@@ -430,7 +460,7 @@ describe('Store with OptimisticMutationConfig', () => {
     const authorResult = store.resolve('Author:0', 'name');
     expect(authorResult).toBe('Jovi');
     const deps = InMemoryData.getCurrentDependencies();
-    expect(deps).toEqual({ 'Author:0': true });
+    expect(deps).toEqual(new Set(['Author:0']));
     InMemoryData.clearDataState();
   });
 
@@ -444,7 +474,7 @@ describe('Store with OptimisticMutationConfig', () => {
     const result = store.resolve(parent, 'author');
     expect(result).toEqual('Author:0');
     const deps = InMemoryData.getCurrentDependencies();
-    expect(deps).toEqual({ 'Todo:0': true });
+    expect(deps).toEqual(new Set(['Todo:0']));
     InMemoryData.clearDataState();
   });
 
@@ -468,7 +498,7 @@ describe('Store with OptimisticMutationConfig', () => {
     );
     let { data } = query(store, { query: connection });
 
-    InMemoryData.initDataState('read', store.data, null);
+    InMemoryData.initDataState('write', store.data, null);
     expect((data as any).exercisesConnection).toEqual(null);
     const fields = store.inspectFields({ __typename: 'Query' });
     fields.forEach(({ fieldName, arguments: args }) => {
@@ -483,7 +513,7 @@ describe('Store with OptimisticMutationConfig', () => {
   });
 
   it('should be able to write a fragment', () => {
-    InMemoryData.initDataState('read', store.data, null);
+    InMemoryData.initDataState('write', store.data, null);
 
     store.writeFragment(
       gql`
@@ -501,7 +531,50 @@ describe('Store with OptimisticMutationConfig', () => {
     );
 
     const deps = InMemoryData.getCurrentDependencies();
-    expect(deps).toEqual({ 'Todo:0': true });
+    expect(deps).toEqual(new Set(['Todo:0']));
+
+    const { data } = query(store, { query: Todos });
+
+    expect(data).toEqual({
+      __typename: 'Query',
+      todos: [
+        {
+          ...todosData.todos[0],
+          text: 'update',
+          complete: true,
+        },
+        todosData.todos[1],
+        todosData.todos[2],
+      ],
+    });
+  });
+
+  it('should be able to write a fragment by name', () => {
+    InMemoryData.initDataState('write', store.data, null);
+
+    store.writeFragment(
+      gql`
+        fragment authorFields on Author {
+          id
+        }
+
+        fragment todoFields on Todo {
+          id
+          text
+          complete
+        }
+      `,
+      {
+        id: '0',
+        text: 'update',
+        complete: true,
+      },
+      undefined,
+      'todoFields'
+    );
+
+    const deps = InMemoryData.getCurrentDependencies();
+    expect(deps).toEqual(new Set(['Todo:0']));
 
     const { data } = query(store, { query: Todos });
 
@@ -534,7 +607,43 @@ describe('Store with OptimisticMutationConfig', () => {
     );
 
     const deps = InMemoryData.getCurrentDependencies();
-    expect(deps).toEqual({ 'Todo:0': true });
+    expect(deps).toEqual(new Set(['Todo:0']));
+
+    expect(result).toEqual({
+      id: '0',
+      text: 'Go to the shops',
+      complete: false,
+      __typename: 'Todo',
+    });
+
+    InMemoryData.clearDataState();
+  });
+
+  it('should be able to read a fragment by name', () => {
+    InMemoryData.initDataState('read', store.data, null);
+    const result = store.readFragment(
+      gql`
+        fragment authorFields on Author {
+          id
+          text
+          complete
+          __typename
+        }
+
+        fragment todoFields on Todo {
+          id
+          text
+          complete
+          __typename
+        }
+      `,
+      { id: '0' },
+      undefined,
+      'todoFields'
+    );
+
+    const deps = InMemoryData.getCurrentDependencies();
+    expect(deps).toEqual(new Set(['Todo:0']));
 
     expect(result).toEqual({
       id: '0',
@@ -547,7 +656,7 @@ describe('Store with OptimisticMutationConfig', () => {
   });
 
   it('should be able to update a query', () => {
-    InMemoryData.initDataState('read', store.data, null);
+    InMemoryData.initDataState('write', store.data, null);
     store.updateQuery({ query: Todos }, data => ({
       ...data,
       todos: [
@@ -607,7 +716,7 @@ describe('Store with OptimisticMutationConfig', () => {
       }
     );
 
-    InMemoryData.initDataState('read', store.data, null);
+    InMemoryData.initDataState('write', store.data, null);
     store.updateQuery({ query: Appointment, variables: { id: '1' } }, data => ({
       ...data,
       appointment: {
@@ -636,14 +745,16 @@ describe('Store with OptimisticMutationConfig', () => {
     const result = store.readQuery({ query: Todos });
 
     const deps = InMemoryData.getCurrentDependencies();
-    expect(deps).toEqual({
-      'Query.todos': true,
-      'Todo:0': true,
-      'Todo:1': true,
-      'Todo:2': true,
-      'Author:0': true,
-      'Author:1': true,
-    });
+    expect(deps).toEqual(
+      new Set([
+        'Query.todos',
+        'Todo:0',
+        'Todo:1',
+        'Todo:2',
+        'Author:0',
+        'Author:1',
+      ])
+    );
 
     expect(result).toEqual({
       __typename: 'Query',
@@ -674,7 +785,7 @@ describe('Store with OptimisticMutationConfig', () => {
       },
       1
     );
-    expect(dependencies).toEqual({ 'Todo:1': true });
+    expect(dependencies).toEqual(new Set(['Todo:1']));
     let { data } = query(store, { query: Todos });
     expect(data).toEqual({
       __typename: 'Query',
@@ -704,9 +815,66 @@ describe('Store with OptimisticMutationConfig', () => {
     });
   });
 
+  it('should be able to optimistically mutate with partial data', () => {
+    const { dependencies } = writeOptimistic(
+      store,
+      {
+        query: gql`
+          mutation {
+            addTodo(id: "0", complete: true, __typename: "Todo") {
+              id
+              text
+              complete
+              __typename
+            }
+          }
+        `,
+      },
+      1
+    );
+    expect(dependencies).toEqual(new Set(['Todo:0']));
+    let { data } = query(store, { query: Todos });
+    expect(data).toEqual({
+      __typename: 'Query',
+      todos: [
+        {
+          ...todosData.todos[0],
+          complete: true,
+        },
+        todosData.todos[1],
+        todosData.todos[2],
+      ],
+    });
+
+    InMemoryData.noopDataState(store.data, 1);
+
+    ({ data } = query(store, { query: Todos }));
+    expect(data).toEqual({
+      __typename: 'Query',
+      todos: todosData.todos,
+    });
+  });
+
   describe('Invalidating an entity', () => {
-    it('removes an entity from a list.', () => {
+    it('removes an entity from a list by object-key.', () => {
+      InMemoryData.initDataState('write', store.data, null);
       store.invalidate(todosData.todos[1]);
+      const { data } = query(store, { query: Todos });
+      expect(data).toBe(null);
+    });
+
+    it('removes an entity from a list by string-key.', () => {
+      InMemoryData.initDataState('write', store.data, null);
+      store.invalidate(store.keyOfEntity(todosData.todos[1]));
+      const { data } = query(store, { query: Todos });
+      expect(data).toBe(null);
+    });
+  });
+
+  describe('Invalidating a type', () => {
+    it('removes an entity from a list.', () => {
+      InMemoryData.initDataState('write', store.data, null);
+      store.invalidate('Todo');
       const { data } = query(store, { query: Todos });
       expect(data).toBe(null);
     });
@@ -731,8 +899,8 @@ describe('Store with storage', () => {
 
   it('should be able to store and rehydrate data', () => {
     const storage: StorageAdapter = {
-      readData: jest.fn(),
-      writeData: jest.fn(),
+      readData: vi.fn(),
+      writeData: vi.fn(),
     };
 
     store.data.storage = storage;
@@ -786,8 +954,8 @@ describe('Store with storage', () => {
     } as any;
 
     const storage: StorageAdapter = {
-      readData: jest.fn(),
-      writeData: jest.fn(),
+      readData: vi.fn(),
+      writeData: vi.fn(),
     };
 
     store.data.storage = storage;
@@ -823,8 +991,8 @@ describe('Store with storage', () => {
 
   it('persists commutative layers and ignores optimistic layers', () => {
     const storage: StorageAdapter = {
-      readData: jest.fn(),
-      writeData: jest.fn(),
+      readData: vi.fn(),
+      writeData: vi.fn(),
     };
 
     store.data.storage = storage;
@@ -884,8 +1052,8 @@ describe('Store with storage', () => {
     expect(warnMessage).toContain('https://bit.ly/2XbVrpR#24');
   });
 
-  it('should use different rootConfigs', function () {
-    const fakeUpdater = jest.fn();
+  it('should use different rootConfigs', () => {
+    const fakeUpdater = vi.fn();
 
     const store = new Store({
       schema: {
@@ -902,14 +1070,13 @@ describe('Store with storage', () => {
         },
       },
       updates: {
-        Mutation: {
+        mutation_root: {
           toggleTodo: fakeUpdater,
         },
       },
     });
 
     const mutationData = {
-      __typename: 'mutation_root',
       toggleTodo: {
         __typename: 'Todo',
         id: 1,
@@ -927,7 +1094,7 @@ describe('Store with storage', () => {
           }
         `,
       },
-      mutationData
+      mutationData as any
     );
 
     expect(fakeUpdater).toBeCalledTimes(1);

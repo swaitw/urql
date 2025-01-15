@@ -1,6 +1,6 @@
 import { stringifyVariables } from '@urql/core';
 
-import {
+import type {
   Link,
   EntityField,
   FieldInfo,
@@ -8,6 +8,7 @@ import {
   SerializedEntries,
   Dependencies,
   OperationType,
+  DataField,
   Data,
 } from '../types';
 
@@ -18,19 +19,20 @@ import {
   joinKeys,
 } from './keys';
 
-import { makeDict } from '../helpers/dict';
 import { invariant, currentDebugStack } from '../helpers/help';
 
 type Dict<T> = Record<string, T>;
 type KeyMap<T> = Map<string, T>;
-type OptimisticMap<T> = Record<number, T>;
+type OperationMap<T> = Map<number, T>;
 
 interface NodeMap<T> {
-  optimistic: OptimisticMap<KeyMap<Dict<T | undefined>>>;
+  optimistic: OperationMap<KeyMap<Dict<T | undefined>>>;
   base: KeyMap<Dict<T>>;
 }
 
 export interface InMemoryData {
+  /** Flag for whether the data is waiting for hydration */
+  hydrating: boolean;
   /** Flag for whether deferred tasks have been scheduled yet */
   defer: boolean;
   /** A list of entities that have been flagged for gargabe collection since no references to them are left */
@@ -40,50 +42,58 @@ export interface InMemoryData {
   /** The API's "Query" typename which is needed to filter dependencies */
   queryRootKey: string;
   /** Number of references to each entity (except "Query") */
-  refCount: Dict<number>;
-  /** Number of references to each entity on optimistic layers */
-  refLock: OptimisticMap<Dict<number>>;
+  refCount: KeyMap<number>;
   /** A map of entity fields (key-value entries per entity) */
   records: NodeMap<EntityField>;
   /** A map of entity links which are connections from one entity to another (key-value entries per entity) */
   links: NodeMap<Link>;
+  /** A map of typename to a list of entity-keys belonging to said type */
+  types: Map<string, Set<string>>;
   /** A set of Query operation keys that are in-flight and deferred/streamed */
   deferredKeys: Set<number>;
   /** A set of Query operation keys that are in-flight and awaiting a result */
   commutativeKeys: Set<number>;
+  /** A set of Query operation keys that have been written to */
+  dirtyKeys: Set<number>;
   /** The order of optimistic layers */
   optimisticOrder: number[];
   /** This may be a persistence adapter that will receive changes in a batch */
   storage: StorageAdapter | null;
+  /** A map of all the types we have encountered that did not map directly to a concrete type */
+  abstractToConcreteMap: Map<string, Set<string>>;
 }
 
-let currentOwnership: null | Set<Data> = null;
-let currentDataMapping: null | Map<Data, Data> = null;
-let currentOperation: null | OperationType = null;
+let currentOwnership: null | WeakSet<any> = null;
+let currentDataMapping: null | WeakMap<any, any> = null;
 let currentData: null | InMemoryData = null;
-let currentDependencies: null | Dependencies = null;
 let currentOptimisticKey: null | number = null;
-let currentOptimistic = false;
+export let currentOperation: null | OperationType = null;
+export let currentDependencies: null | Dependencies = null;
+export let currentForeignData = false;
+export let currentOptimistic = false;
 
-const makeNodeMap = <T>(): NodeMap<T> => ({
-  optimistic: makeDict(),
-  base: new Map(),
-});
+export function makeData(data: DataField | void, isArray?: false): Data;
+export function makeData(data: DataField | void, isArray: true): DataField[];
 
 /** Creates a new data object unless it's been created in this data run */
-export const makeData = (data?: Data): Data => {
-  let newData: Data;
+export function makeData(data?: DataField | void, isArray?: boolean) {
+  let newData: Data | Data[] | undefined;
   if (data) {
     if (currentOwnership!.has(data)) return data;
-    newData = currentDataMapping!.get(data) || ({ ...data } as Data);
+    newData = currentDataMapping!.get(data) as any;
+  }
+
+  if (newData == null) {
+    newData = (isArray ? [] : {}) as any;
+  }
+
+  if (data) {
     currentDataMapping!.set(data, newData);
-  } else {
-    newData = {} as Data;
   }
 
   currentOwnership!.add(newData);
   return newData;
-};
+}
 
 export const ownsData = (data?: Data): boolean =>
   !!data && currentOwnership!.has(data);
@@ -93,14 +103,16 @@ export const initDataState = (
   operationType: OperationType,
   data: InMemoryData,
   layerKey?: number | null,
-  isOptimistic?: boolean
+  isOptimistic?: boolean,
+  isForeignData?: boolean
 ) => {
-  currentOwnership = new Set();
-  currentDataMapping = new Map();
+  currentOwnership = new WeakSet();
+  currentDataMapping = new WeakMap();
   currentOperation = operationType;
   currentData = data;
-  currentDependencies = makeDict();
+  currentDependencies = new Set();
   currentOptimistic = !!isOptimistic;
+  currentForeignData = !!isForeignData;
   if (process.env.NODE_ENV !== 'production') {
     currentDebugStack.length = 0;
   }
@@ -111,13 +123,23 @@ export const initDataState = (
     // We don't create new layers for read operations and instead simply
     // apply the currently available layer, if any
     currentOptimisticKey = layerKey;
-  } else if (isOptimistic || data.optimisticOrder.length > 1) {
+  } else if (
+    isOptimistic ||
+    data.hydrating ||
+    data.optimisticOrder.length > 1
+  ) {
     // If this operation isn't optimistic and we see it for the first time,
     // then it must've been optimistic in the past, so we can proactively
     // clear the optimistic data before writing
     if (!isOptimistic && !data.commutativeKeys.has(layerKey)) {
       reserveLayer(data, layerKey);
     } else if (isOptimistic) {
+      if (
+        data.optimisticOrder.indexOf(layerKey) !== -1 &&
+        !data.commutativeKeys.has(layerKey)
+      ) {
+        data.optimisticOrder.splice(data.optimisticOrder.indexOf(layerKey), 1);
+      }
       // NOTE: This optimally shouldn't happen as it implies that an optimistic
       // write is being performed after a concrete write.
       data.commutativeKeys.delete(layerKey);
@@ -151,18 +173,20 @@ export const clearDataState = () => {
   currentOptimisticKey = null;
 
   // Determine whether the current operation has been a commutative layer
-  if (layerKey && data.optimisticOrder.indexOf(layerKey) > -1) {
+  if (
+    !data.hydrating &&
+    layerKey &&
+    data.optimisticOrder.indexOf(layerKey) > -1
+  ) {
     // Squash all layers in reverse order (low priority upwards) that have
     // been written already
     let i = data.optimisticOrder.length;
     while (
       --i >= 0 &&
-      data.refLock[data.optimisticOrder[i]] &&
-      data.commutativeKeys.has(data.optimisticOrder[i]) &&
-      !data.deferredKeys.has(data.optimisticOrder[i])
-    ) {
+      data.dirtyKeys.has(data.optimisticOrder[i]) &&
+      data.commutativeKeys.has(data.optimisticOrder[i])
+    )
       squashLayer(data.optimisticOrder[i]);
-    }
   }
 
   currentOwnership = null;
@@ -174,16 +198,19 @@ export const clearDataState = () => {
     currentDebugStack.length = 0;
   }
 
-  // Schedule deferred tasks if we haven't already
-  if (process.env.NODE_ENV !== 'test' && !data.defer) {
-    data.defer = true;
-    Promise.resolve().then(() => {
-      initDataState('read', data, null);
-      gc();
-      persistData();
-      clearDataState();
-      data.defer = false;
-    });
+  if (process.env.NODE_ENV !== 'test') {
+    // Schedule deferred tasks if we haven't already, and if either a persist or GC run
+    // are likely to be needed
+    if (!data.defer && (data.storage || !data.optimisticOrder.length)) {
+      data.defer = true;
+      setTimeout(() => {
+        initDataState('read', data, null);
+        gc();
+        persistData();
+        clearDataState();
+        data.defer = false;
+      });
+    }
   }
 };
 
@@ -196,18 +223,6 @@ export const noopDataState = (
   if (layerKey && !isOptimistic) data.deferredKeys.delete(layerKey);
   initDataState('write', data, layerKey, isOptimistic);
   clearDataState();
-};
-
-export const getCurrentOperation = (): OperationType => {
-  invariant(
-    currentOperation !== null,
-    'Invalid Cache call: The cache may only be accessed or mutated during' +
-      'operations like write or query, or as part of its resolvers, updaters, ' +
-      'or optimistic configs.',
-    2
-  );
-
-  return currentOperation;
 };
 
 /** As we're writing, we keep around all the records and links we've read or have written to */
@@ -223,17 +238,27 @@ export const getCurrentDependencies = (): Dependencies => {
   return currentDependencies;
 };
 
+const DEFAULT_EMPTY_SET = new Set<string>();
 export const make = (queryRootKey: string): InMemoryData => ({
+  hydrating: false,
   defer: false,
   gc: new Set(),
+  types: new Map(),
   persist: new Set(),
   queryRootKey,
-  refCount: makeDict(),
-  refLock: makeDict(),
-  links: makeNodeMap(),
-  records: makeNodeMap(),
+  refCount: new Map(),
+  links: {
+    optimistic: new Map(),
+    base: new Map(),
+  },
+  abstractToConcreteMap: new Map(),
+  records: {
+    optimistic: new Map(),
+    base: new Map(),
+  },
   deferredKeys: new Set(),
   commutativeKeys: new Set(),
+  dirtyKeys: new Set(),
   optimisticOrder: [],
   storage: null,
 });
@@ -245,16 +270,26 @@ const setNode = <T>(
   fieldKey: string,
   value: T
 ) => {
+  if (process.env.NODE_ENV !== 'production') {
+    invariant(
+      currentOperation !== 'read',
+      'Invalid Cache write: You may not write to the cache during cache reads. ' +
+        ' Accesses to `cache.writeFragment`, `cache.updateQuery`, and `cache.link` may ' +
+        ' not be made inside `resolvers` for instance.',
+      27
+    );
+  }
+
   // Optimistic values are written to a map in the optimistic dict
   // All other values are written to the base map
   const keymap: KeyMap<Dict<T | undefined>> = currentOptimisticKey
-    ? map.optimistic[currentOptimisticKey]
+    ? map.optimistic.get(currentOptimisticKey)!
     : map.base;
 
   // On the map itself we get or create the entity as a dict
   let entity = keymap.get(entityKey) as Dict<T | undefined>;
   if (entity === undefined) {
-    keymap.set(entityKey, (entity = makeDict()));
+    keymap.set(entityKey, (entity = Object.create(null)));
   }
 
   // If we're setting undefined we delete the node's entry
@@ -284,7 +319,7 @@ const getNode = <T>(
   // This first iterates over optimistic layers (in order)
   for (let i = 0, l = currentData!.optimisticOrder.length; i < l; i++) {
     const layerKey = currentData!.optimisticOrder[i];
-    const optimistic = map.optimistic[layerKey];
+    const optimistic = map.optimistic.get(layerKey);
     // If we're reading starting from a specific layer, we skip until a match
     skip = skip && layerKey !== currentOptimisticKey;
     // If the node and node value exists it is returned, including undefined
@@ -306,42 +341,28 @@ const getNode = <T>(
   return node !== undefined ? node[fieldKey] : undefined;
 };
 
+export function getRefCount(entityKey: string): number {
+  return currentData!.refCount.get(entityKey) || 0;
+}
+
 /** Adjusts the reference count of an entity on a refCount dict by "by" and updates the gc */
-const updateRCForEntity = (
-  gc: void | Set<string>,
-  refCount: Dict<number>,
-  entityKey: string,
-  by: number
-): void => {
-  // Retrieve the reference count
-  const count = refCount[entityKey] !== undefined ? refCount[entityKey] : 0;
-  // Adjust it by the "by" value
-  const newCount = (refCount[entityKey] = (count + by) | 0);
+const updateRCForEntity = (entityKey: string, by: number): void => {
+  // Retrieve the reference count and adjust it by "by"
+  const count = getRefCount(entityKey);
+  const newCount = count + by > 0 ? count + by : 0;
+  currentData!.refCount.set(entityKey, newCount);
   // Add it to the garbage collection batch if it needs to be deleted or remove it
   // from the batch if it needs to be kept
-  if (gc !== undefined) {
-    if (newCount <= 0) gc.add(entityKey);
-    else if (count <= 0 && newCount > 0) gc.delete(entityKey);
-  }
+  if (!newCount) currentData!.gc.add(entityKey);
+  else if (!count && newCount) currentData!.gc.delete(entityKey);
 };
 
 /** Adjusts the reference counts of all entities of a link on a refCount dict by "by" and updates the gc */
-const updateRCForLink = (
-  gc: void | Set<string>,
-  refCount: Dict<number>,
-  link: Link | undefined,
-  by: number
-): void => {
-  if (typeof link === 'string') {
-    updateRCForEntity(gc, refCount, link, by);
-  } else if (Array.isArray(link)) {
-    for (let i = 0, l = link.length; i < l; i++) {
-      if (Array.isArray(link[i])) {
-        updateRCForLink(gc, refCount, link[i], by);
-      } else if (link[i]) {
-        updateRCForEntity(gc, refCount, link[i] as string, by);
-      }
-    }
+const updateRCForLink = (link: Link | undefined, by: number): void => {
+  if (Array.isArray(link)) {
+    for (let i = 0, l = link.length; i < l; i++) updateRCForLink(link[i], by);
+  } else if (typeof link === 'string') {
+    updateRCForEntity(link, by);
   }
 };
 
@@ -375,7 +396,7 @@ const extractNodeMapFields = <T>(
 
   // Then extracts FieldInfo for the entity from the optimistic maps
   for (let i = 0, l = currentData!.optimisticOrder.length; i < l; i++) {
-    const optimistic = map.optimistic[currentData!.optimisticOrder[i]];
+    const optimistic = map.optimistic.get(currentData!.optimisticOrder[i]);
     if (optimistic !== undefined) {
       extractNodeFields(fieldInfos, seenFieldKeys, optimistic.get(entityKey));
     }
@@ -384,48 +405,45 @@ const extractNodeMapFields = <T>(
 
 /** Garbage collects all entities that have been marked as having no references */
 export const gc = () => {
+  // If we're currently awaiting deferred results, abort GC run
+  if (currentData!.optimisticOrder.length) return;
+
   // Iterate over all entities that have been marked for deletion
   // Entities have been marked for deletion in `updateRCForEntity` if
   // their reference count dropped to 0
-  currentData!.gc.forEach((entityKey: string, _, batch: Set<string>) => {
-    // Check first whether the reference count is still 0
-    const rc = currentData!.refCount[entityKey] || 0;
-    if (rc > 0) {
-      batch.delete(entityKey);
-      return;
-    }
+  for (const entityKey of currentData!.gc.keys()) {
+    // Remove the current key from the GC batch
+    currentData!.gc.delete(entityKey);
 
-    // Each optimistic layer may also still contain some references to marked entities
-    for (const layerKey in currentData!.refLock) {
-      const refCount = currentData!.refLock[layerKey];
-      const locks = refCount[entityKey] || 0;
-      // If the optimistic layer has any references to the entity, don't GC it,
-      // otherwise delete the reference count from the optimistic layer
-      if (locks > 0) return;
-      delete refCount[entityKey];
-    }
+    // Check first whether the entity has any references,
+    // if so, we skip it from the GC run
+    const rc = getRefCount(entityKey);
+    if (rc > 0) continue;
 
+    const record = currentData!.records.base.get(entityKey);
     // Delete the reference count, and delete the entity from the GC batch
-    delete currentData!.refCount[entityKey];
-    batch.delete(entityKey);
+    currentData!.refCount.delete(entityKey);
     currentData!.records.base.delete(entityKey);
+
+    const typename = (record && record.__typename) as string | undefined;
+    if (typename) {
+      const type = currentData!.types.get(typename);
+      if (type) type.delete(entityKey);
+    }
+
     const linkNode = currentData!.links.base.get(entityKey);
     if (linkNode) {
       currentData!.links.base.delete(entityKey);
-      for (const fieldKey in linkNode) {
-        updateRCForLink(batch, currentData!.refCount, linkNode[fieldKey], -1);
-      }
+      for (const fieldKey in linkNode) updateRCForLink(linkNode[fieldKey], -1);
     }
-  });
+  }
 };
 
 const updateDependencies = (entityKey: string, fieldKey?: string) => {
-  if (fieldKey !== '__typename') {
-    if (entityKey !== currentData!.queryRootKey) {
-      currentDependencies![entityKey] = true;
-    } else if (fieldKey !== undefined) {
-      currentDependencies![joinKeys(entityKey, fieldKey)] = true;
-    }
+  if (entityKey !== currentData!.queryRootKey) {
+    currentDependencies!.add(entityKey);
+  } else if (fieldKey !== undefined && fieldKey !== '__typename') {
+    currentDependencies!.add(joinKeys(entityKey, fieldKey));
   }
 };
 
@@ -440,7 +458,9 @@ export const readRecord = (
   entityKey: string,
   fieldKey: string
 ): EntityField => {
-  updateDependencies(entityKey, fieldKey);
+  if (currentOperation === 'read') {
+    updateDependencies(entityKey, fieldKey);
+  }
   return getNode(currentData!.records, entityKey, fieldKey);
 };
 
@@ -449,8 +469,44 @@ export const readLink = (
   entityKey: string,
   fieldKey: string
 ): Link | undefined => {
-  updateDependencies(entityKey, fieldKey);
+  if (currentOperation === 'read') {
+    updateDependencies(entityKey, fieldKey);
+  }
   return getNode(currentData!.links, entityKey, fieldKey);
+};
+
+export const getEntitiesForType = (typename: string): Set<string> =>
+  currentData!.types.get(typename) || DEFAULT_EMPTY_SET;
+
+export const writeType = (typename: string, entityKey: string) => {
+  const existingTypes = currentData!.types.get(typename);
+  if (!existingTypes) {
+    const typeSet = new Set<string>();
+    typeSet.add(entityKey);
+    currentData!.types.set(typename, typeSet);
+  } else {
+    existingTypes.add(entityKey);
+  }
+};
+
+export const getConcreteTypes = (typename: string): Set<string> =>
+  currentData!.abstractToConcreteMap.get(typename) || DEFAULT_EMPTY_SET;
+
+export const isSeenConcreteType = (typename: string): boolean =>
+  currentData!.types.has(typename);
+
+export const writeConcreteType = (
+  abstractType: string,
+  concreteType: string
+) => {
+  const existingTypes = currentData!.abstractToConcreteMap.get(abstractType);
+  if (!existingTypes) {
+    const typeSet = new Set<string>();
+    typeSet.add(concreteType);
+    currentData!.abstractToConcreteMap.set(abstractType, typeSet);
+  } else {
+    existingTypes.add(concreteType);
+  }
 };
 
 /** Writes an entity's field (a "record") to data */
@@ -459,8 +515,12 @@ export const writeRecord = (
   fieldKey: string,
   value?: EntityField
 ) => {
-  updateDependencies(entityKey, fieldKey);
-  updatePersist(entityKey, fieldKey);
+  const existing = getNode(currentData!.records, entityKey, fieldKey);
+  if (!isEqualLinkOrScalar(existing, value)) {
+    updateDependencies(entityKey, fieldKey);
+    updatePersist(entityKey, fieldKey);
+  }
+
   setNode(currentData!.records, entityKey, fieldKey, value);
 };
 
@@ -474,39 +534,24 @@ export const writeLink = (
   fieldKey: string,
   link?: Link | undefined
 ) => {
-  const data = currentData!;
-  // Retrieve the reference counting dict or the optimistic reference locking dict
-  let refCount: Dict<number>;
-  // Retrive the link NodeMap from either an optimistic or the base layer
-  let links: KeyMap<Dict<Link | undefined>> | undefined;
-  // Set the GC batch if we're not optimistically updating
-  let gc: void | Set<string>;
-  if (currentOptimisticKey) {
-    // The refLock counters are also reference counters, but they prevent
-    // garbage collection instead of being used to trigger it
-    refCount =
-      data.refLock[currentOptimisticKey] ||
-      (data.refLock[currentOptimisticKey] = makeDict());
-    links = data.links.optimistic[currentOptimisticKey];
-  } else {
-    refCount = data.refCount;
-    links = data.links.base;
-    gc = data.gc;
+  // Retrieve the link NodeMap from either an optimistic or the base layer
+  const links = currentOptimisticKey
+    ? currentData!.links.optimistic.get(currentOptimisticKey)
+    : currentData!.links.base;
+  // Update the reference count for the link
+  if (!currentOptimisticKey) {
+    const entityLinks = links && links.get(entityKey);
+    updateRCForLink(entityLinks && entityLinks[fieldKey], -1);
+    updateRCForLink(link, 1);
+  }
+  const existing = getNode(currentData!.links, entityKey, fieldKey);
+  if (!isEqualLinkOrScalar(existing, link)) {
+    updateDependencies(entityKey, fieldKey);
+    updatePersist(entityKey, fieldKey);
   }
 
-  // Retrieve the previous link for this field
-  const prevLinkNode = links && links.get(entityKey);
-  const prevLink = prevLinkNode && prevLinkNode[fieldKey];
-
-  // Update persistence batch and dependencies
-  updateDependencies(entityKey, fieldKey);
-  updatePersist(entityKey, fieldKey);
   // Update the link
-  setNode(data.links, entityKey, fieldKey, link);
-  // First decrease the reference count for the previous link
-  updateRCForLink(gc, refCount, prevLink, -1);
-  // Then increase the reference count for the new link
-  updateRCForLink(gc, refCount, link, 1);
+  setNode(currentData!.links, entityKey, fieldKey, link);
 };
 
 /** Reserves an optimistic layer and preorders it */
@@ -515,39 +560,42 @@ export const reserveLayer = (
   layerKey: number,
   hasNext?: boolean
 ) => {
+  // Find the current index for the layer, and remove it from
+  // the order if it exists already
+  let index = data.optimisticOrder.indexOf(layerKey);
+  if (index > -1) data.optimisticOrder.splice(index, 1);
+
   if (hasNext) {
     data.deferredKeys.add(layerKey);
+    // If the layer has future results then we'll move it past any layer that's
+    // still empty, so currently pending operations will take precedence over it
+    for (
+      index = index > -1 ? index : 0;
+      index < data.optimisticOrder.length &&
+      !data.deferredKeys.has(data.optimisticOrder[index]) &&
+      (!data.dirtyKeys.has(data.optimisticOrder[index]) ||
+        !data.commutativeKeys.has(data.optimisticOrder[index]));
+      index++
+    );
   } else {
     data.deferredKeys.delete(layerKey);
-  }
-
-  let index = data.optimisticOrder.indexOf(layerKey);
-  if (index > -1) {
-    if (hasNext || !data.commutativeKeys.has(layerKey)) {
-      data.optimisticOrder.splice(index, 1);
-      // Protect optimistic layers from being turned into non-optimistic layers
-      // while preserving optimistic data
+    // Protect optimistic layers from being turned into non-optimistic layers
+    // while preserving optimistic data
+    if (index > -1 && !data.commutativeKeys.has(layerKey))
       clearLayer(data, layerKey);
-    } else {
-      return;
-    }
+    index = 0;
   }
 
-  // If the layer has future results then we'll move it past any layer that's
-  // still empty, so currently pending operations will take precedence over it
-  for (
-    index = 0;
-    hasNext &&
-    index < data.optimisticOrder.length &&
-    !data.deferredKeys.has(data.optimisticOrder[index]) &&
-    (!data.refLock[data.optimisticOrder[index]] ||
-      !data.commutativeKeys.has(data.optimisticOrder[index]));
-    index++
-  );
-
+  // Register the layer with the deferred or "top" index and
+  // mark it as commutative
   data.optimisticOrder.splice(index, 0, layerKey);
   data.commutativeKeys.add(layerKey);
 };
+
+/** Checks whether a given layer exists */
+export const hasLayer = (data: InMemoryData, layerKey: number) =>
+  data.commutativeKeys.has(layerKey) ||
+  data.optimisticOrder.indexOf(layerKey) > -1;
 
 /** Creates an optimistic layer of links and records */
 const createLayer = (data: InMemoryData, layerKey: number) => {
@@ -555,19 +603,19 @@ const createLayer = (data: InMemoryData, layerKey: number) => {
     data.optimisticOrder.unshift(layerKey);
   }
 
-  if (!data.refLock[layerKey]) {
-    data.refLock[layerKey] = makeDict();
-    data.links.optimistic[layerKey] = new Map();
-    data.records.optimistic[layerKey] = new Map();
+  if (!data.dirtyKeys.has(layerKey)) {
+    data.dirtyKeys.add(layerKey);
+    data.links.optimistic.set(layerKey, new Map());
+    data.records.optimistic.set(layerKey, new Map());
   }
 };
 
 /** Clears all links and records of an optimistic layer */
 const clearLayer = (data: InMemoryData, layerKey: number) => {
-  if (data.refLock[layerKey]) {
-    delete data.refLock[layerKey];
-    delete data.records.optimistic[layerKey];
-    delete data.links.optimistic[layerKey];
+  if (data.dirtyKeys.has(layerKey)) {
+    data.dirtyKeys.delete(layerKey);
+    data.records.optimistic.delete(layerKey);
+    data.links.optimistic.delete(layerKey);
     data.deferredKeys.delete(layerKey);
   }
 };
@@ -587,22 +635,29 @@ const deleteLayer = (data: InMemoryData, layerKey: number) => {
 const squashLayer = (layerKey: number) => {
   // Hide current dependencies from squashing operations
   const previousDependencies = currentDependencies;
-  currentDependencies = makeDict();
+  currentDependencies = new Set();
+  currentOperation = 'write';
 
-  const links = currentData!.links.optimistic[layerKey];
+  const links = currentData!.links.optimistic.get(layerKey);
   if (links) {
-    links.forEach((keyMap, entityKey) => {
-      for (const fieldKey in keyMap)
+    for (const entry of links.entries()) {
+      const entityKey = entry[0];
+      const keyMap = entry[1];
+      for (const fieldKey in keyMap) {
         writeLink(entityKey, fieldKey, keyMap[fieldKey]);
-    });
+      }
+    }
   }
 
-  const records = currentData!.records.optimistic[layerKey];
+  const records = currentData!.records.optimistic.get(layerKey);
   if (records) {
-    records.forEach((keyMap, entityKey) => {
-      for (const fieldKey in keyMap)
+    for (const entry of records.entries()) {
+      const entityKey = entry[0];
+      const keyMap = entry[1];
+      for (const fieldKey in keyMap) {
         writeRecord(entityKey, fieldKey, keyMap[fieldKey]);
-    });
+      }
+    }
   }
 
   currentDependencies = previousDependencies;
@@ -627,8 +682,8 @@ export const persistData = () => {
   if (currentData!.storage) {
     currentOptimistic = true;
     currentOperation = 'read';
-    const entries: SerializedEntries = makeDict();
-    currentData!.persist.forEach(key => {
+    const entries: SerializedEntries = {};
+    for (const key of currentData!.persist.keys()) {
       const { entityKey, fieldKey } = deserializeKeyInfo(key);
       let x: void | Link | EntityField;
       if ((x = readLink(entityKey, fieldKey)) !== undefined) {
@@ -638,7 +693,7 @@ export const persistData = () => {
       } else {
         entries[key] = undefined;
       }
-    });
+    }
 
     currentOptimistic = false;
     currentData!.storage.writeData(entries);
@@ -658,13 +713,30 @@ export const hydrateData = (
     if (value !== undefined) {
       const { entityKey, fieldKey } = deserializeKeyInfo(key);
       if (value[0] === ':') {
-        writeLink(entityKey, fieldKey, JSON.parse(value.slice(1)));
+        if (readLink(entityKey, fieldKey) === undefined)
+          writeLink(entityKey, fieldKey, JSON.parse(value.slice(1)));
       } else {
-        writeRecord(entityKey, fieldKey, JSON.parse(value));
+        if (readRecord(entityKey, fieldKey) === undefined)
+          writeRecord(entityKey, fieldKey, JSON.parse(value));
       }
     }
   }
 
-  clearDataState();
   data.storage = storage;
+  data.hydrating = false;
+  clearDataState();
 };
+
+function isEqualLinkOrScalar(
+  a: Link | EntityField | undefined,
+  b: Link | EntityField | undefined
+) {
+  if (typeof a !== typeof b) return false;
+  if (a !== b) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return !a.some((el, index) => el !== b[index]);
+  }
+
+  return true;
+}

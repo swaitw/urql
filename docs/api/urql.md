@@ -5,6 +5,11 @@ order: 1
 
 # React API
 
+> **Note:** These API docs are deprecated as we now keep TSDocs in all published packages.
+> You can view TSDocs while using these packages in your editor, as long as it supports the
+> TypeScript Language Server.
+> We're planning to replace these API docs with a separate web app soon.
+
 ## useQuery
 
 Accepts a single required options object as an input with the following properties:
@@ -14,7 +19,7 @@ Accepts a single required options object as an input with the following properti
 | `query`         | `string \| DocumentNode` | The query to be executed. Accepts as a plain string query or GraphQL DocumentNode.                       |
 | `variables`     | `?object`                | The variables to be used with the GraphQL request.                                                       |
 | `requestPolicy` | `?RequestPolicy`         | An optional [request policy](./core.md#requestpolicy) that should be used specifying the cache strategy. |
-| `pause`         | `?boolean`               | A boolean flag instructing [execution to be paused](../basics/react-preact.md#pausing-usequery).              |
+| `pause`         | `?boolean`               | A boolean flag instructing [execution to be paused](../basics/react-preact.md#pausing-usequery).         |
 | `context`       | `?object`                | Holds the contextual information for the query.                                                          |
 
 This hook returns a tuple of the shape `[result, executeQuery]`.
@@ -46,12 +51,12 @@ page.](../basics/react-preact.md#mutations)
 
 Accepts a single required options object as an input with the following properties:
 
-| Prop                                                 | Type                     | Description                                                                        |
-| ---------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------- |
-| `query`                                              | `string \| DocumentNode` | The query to be executed. Accepts as a plain string query or GraphQL DocumentNode. |
-| `variables`                                          | `?object`                | The variables to be used with the GraphQL request.                                 |
-| `pause`                                              | `?boolean`               | A boolean flag instructing [execution to be paused](../basics/react-preact.md#pausing-usequery). |
-| `context`                                            | `?object`                | Holds the contextual information for the query.                                    |
+| Prop        | Type                     | Description                                                                                      |
+| ----------- | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `query`     | `string \| DocumentNode` | The query to be executed. Accepts as a plain string query or GraphQL DocumentNode.               |
+| `variables` | `?object`                | The variables to be used with the GraphQL request.                                               |
+| `pause`     | `?boolean`               | A boolean flag instructing [execution to be paused](../basics/react-preact.md#pausing-usequery). |
+| `context`   | `?object`                | Holds the contextual information for the query.                                                  |
 
 The hook optionally accepts a second argument, which may be a handler function with a type signature
 of:
@@ -64,7 +69,7 @@ This function will be called with the previous data (or `undefined`) and the new
 incoming from a subscription event, and may be used to "reduce" the data over time, altering the
 value of `result.data`.
 
-This hook returns a tuple of the shape `[result, executeQuery]`.
+This hook returns a tuple of the shape `[result, executeSubscription]`.
 
 - The `result` is an object with the shape of an [`OperationResult`](./core.md#operationresult).
 - The `executeSubscription` function optionally accepts

@@ -5,7 +5,7 @@ order: 6
 
 # UI Patterns
 
-> This page is incomplete. You can help us expanding it by suggesting more patterns or asking us about common problems you're facing on [GitHub Discussions](https://github.com/FormidableLabs/urql/discussions).
+> This page is incomplete. You can help us expanding it by suggesting more patterns or asking us about common problems you're facing on [GitHub Discussions](https://github.com/urql-graphql/urql/discussions).
 
 Generally, `urql`'s API surface is small and compact. Some common problems that we're facing when building apps may look like they're not a built-in feature, however, there are several patterns that even a lean UI can support.
 This page is a collection of common UI patterns and problems we may face with GraphQL and how we can tackle them in
@@ -38,7 +38,7 @@ const PageQuery = gql`
   }
 `;
 
-const ListPage = ({ variables, isLastPage }) => {
+const SearchResultPage = ({ variables, isLastPage, onLoadMore }) => {
   const [{ data, fetching, error }] = useQuery({ query: PageQuery, variables });
   const todos = data?.todos;
 
@@ -54,17 +54,13 @@ const ListPage = ({ variables, isLastPage }) => {
             </div>
           ))}
           {isLastPage && todos.pageInfo.hasNextPage && (
-            <button
-              onClick={() => onLoadMore(todos.pageInfo.endCursor)}
-            >
-              load more
-            </button>
+            <button onClick={() => onLoadMore(todos.pageInfo.endCursor)}>load more</button>
           )}
         </>
       )}
     </div>
   );
-}
+};
 
 const Search = () => {
   const [pageVariables, setPageVariables] = useState([
@@ -81,21 +77,21 @@ const Search = () => {
           key={'' + variables.after}
           variables={variables}
           isLastPage={i === pageVariables.length - 1}
-          onLoadMore={after =>
-            setPageVariables([...pageVariables, { after, first: 10 }])
-          }
+          onLoadMore={after => setPageVariables([...pageVariables, { after, first: 10 }])}
         />
       ))}
     </div>
   );
-}
+};
 ```
 
 Here we keep an array of all `variables` we've encountered and use them to render their
 respective `result` page. This only rerenders the additional page rather than having a long
-list that constantly changes. [You can find a full code example of this pattern in our example folder on the topic of Graphcache pagination.](https://github.com/FormidableLabs/urql/tree/main/examples/with-graphcache-pagination)
+list that constantly changes. [You can find a full code example of this pattern in our example folder on the topic of pagination.](https://github.com/urql-graphql/urql/tree/main/examples/with-pagination)
 
-We also do not need to use our normalized cache to achieve this. As long as we're able to split individual lists up into chunks across components, we can also solve this problem entirely in UI code. [Read our example code on how to achieve this.](https://github.com/FormidableLabs/urql/tree/main/examples/with-pagination)
+This code doesn't take changing variables into account, which will affect the cursors. For an
+example that takes full infinite scrolling into account, [you can find a full code example of an
+extended pattern in our example folder on the topic of infinite pagination.](https://github.com/urql-graphql/urql/tree/main/examples/with-infinite-pagination)
 
 ## Prefetching data
 
@@ -119,19 +115,15 @@ const Component = () => {
   const client = useClient();
   const router = useRouter();
 
-  const transitionPage = React.useCallback(async (id) => {
+  const transitionPage = React.useCallback(async id => {
     const loadJSBundle = import('./page.js');
     const loadData = client.query(TodoQuery, { id }).toPromise();
     await Promise.all([loadJSBundle, loadData]);
     router.push(`/todo/${id}`);
   }, []);
 
-  return (
-    <button onClick={() => transitionPage('1')}>
-      Go to todo 1
-    </button>
-  )
-}
+  return <button onClick={() => transitionPage('1')}>Go to todo 1</button>;
+};
 ```
 
 Here we're calling `client.query` to prepare a query when the transition begins.
@@ -160,12 +152,8 @@ const Component = () => {
   const [result, fetch] = useQuery({ query: TodoQuery, pause: true });
   const router = useRouter();
 
-  return (
-    <button onClick={fetch}>
-      Load todos
-    </button>
-  )
-}
+  return <button onClick={fetch}>Load todos</button>;
+};
 ```
 
 We can unpause the hook to start fetching, or, like in this example, call its returned function to manually kick off the query.
@@ -175,27 +163,21 @@ We can unpause the hook to start fetching, or, like in this example, call its re
 In urql we leverage our extensibility pattern named "Exchanges" to manipulate the way
 data comes in and goes out of our client.
 
-- [Stale time](https://github.com/FormidableLabs/urql/tree/main/exchanges/request-policy)
-- [Focus](https://github.com/FormidableLabs/urql/tree/main/exchanges/refocus)
+- [Stale time](https://github.com/urql-graphql/urql/tree/main/exchanges/request-policy)
+- [Focus](https://github.com/urql-graphql/urql/tree/main/exchanges/refocus)
 
 When we want to introduce one of these patterns we add the package and add it to the `exchanges`
 property of our `Client`. In the case of these two we'll have to add it before the cache
 else our requests will never get upgraded.
 
 ```js
-import { createClient, dedupExchange, cacheExchange, fetchExchange } from 'urql';
+import { Client, cacheExchange, fetchExchange } from 'urql';
 import { refocusExchange } from '@urql/exchange-refocus';
 
-const client = createClient({
+const client = new Client({
   url: 'some-url',
-  exchanges: [
-    dedupExchange,
-    refocusExchange(),
-    cacheExchange,
-    fetchExchange,
-  ]
-})
+  exchanges: [refocusExchange(), cacheExchange, fetchExchange],
+});
 ```
 
 That's all we need to do to react to these patterns.
-

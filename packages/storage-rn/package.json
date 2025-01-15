@@ -1,20 +1,21 @@
 {
   "name": "@urql/storage-rn",
-  "version": "0.1.1",
+  "version": "1.1.0",
   "sideEffects": false,
   "description": "Graphcache offline storage for React Native",
   "homepage": "https://formidable.com/open-source/urql/docs/",
-  "bugs": "https://github.com/FormidableLabs/urql/issues",
+  "bugs": "https://github.com/urql-graphql/urql/issues",
   "license": "MIT",
+  "author": "urql GraphQL Contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FormidableLabs/urql.git",
+    "url": "https://github.com/urql-graphql/urql.git",
     "directory": "packages/storage-rn"
   },
   "keywords": [
     "urql",
     "graphql client",
-    "formidablelabs",
+    "graphql",
     "exchanges",
     "react native",
     "offline",
@@ -22,7 +23,7 @@
   ],
   "main": "dist/urql-storage-rn",
   "module": "dist/urql-storage-rn.mjs",
-  "types": "dist/types/index.d.ts",
+  "types": "dist/urql-storage-rn.d.ts",
   "source": "src/index.ts",
   "files": [
     "LICENSE",
@@ -32,9 +33,9 @@
   ],
   "exports": {
     ".": {
+      "types": "./dist/urql-storage-rn.d.ts",
       "import": "./dist/urql-storage-rn.mjs",
       "require": "./dist/urql-storage-rn.js",
-      "types": "./dist/types/index.d.ts",
       "source": "./src/index.ts"
     },
     "./package.json": "./package.json"
@@ -43,19 +44,23 @@
     "clean": "rimraf dist",
     "check": "tsc --noEmit",
     "lint": "eslint --ext=js,jsx,ts,tsx .",
-    "build": "rollup -c ../../scripts/rollup/config.js",
+    "build": "rollup -c ../../scripts/rollup/config.mjs",
     "prepare": "node ../../scripts/prepare/index.js",
     "prepublishOnly": "run-s clean build"
   },
-  "jest": {
-    "preset": "../../scripts/jest/preset"
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": "^1.15.5",
+    "@react-native-community/netinfo": "^6.0.0 || ^7.0.0 || ^8.0.0 || ^9.0.0 || ^11.0.0",
+    "@urql/exchange-graphcache": ">=5.0.0"
   },
   "devDependencies": {
-    "@react-native-async-storage/async-storage": "^1.15.5",
-    "@react-native-community/netinfo": "^6.0.0",
-    "@urql/exchange-graphcache": ">=4.2.1"
+    "@react-native-async-storage/async-storage": "^1.21.0",
+    "@react-native-community/netinfo": "^11.2.1",
+    "@urql/core": "workspace:*",
+    "@urql/exchange-graphcache": "workspace:*"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }

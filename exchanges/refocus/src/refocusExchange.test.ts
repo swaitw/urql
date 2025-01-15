@@ -1,4 +1,7 @@
+// @vitest-environment jsdom
+
 import { pipe, map, makeSubject, publish, tap } from 'wonka';
+import { vi, expect, it, beforeEach } from 'vitest';
 
 import {
   gql,
@@ -8,9 +11,10 @@ import {
   ExchangeIO,
 } from '@urql/core';
 
+import { queryResponse } from '../../../packages/core/src/test-utils';
 import { refocusExchange } from './refocusExchange';
 
-const dispatchDebug = jest.fn();
+const dispatchDebug = vi.fn();
 
 const queryOne = gql`
   {
@@ -32,7 +36,10 @@ const queryOneData = {
 
 let client, op, ops$, next;
 beforeEach(() => {
-  client = createClient({ url: 'http://0.0.0.0' });
+  client = createClient({
+    url: 'http://0.0.0.0',
+    exchanges: [],
+  });
   op = client.createRequestOperation('query', {
     key: 1,
     query: queryOne,
@@ -42,26 +49,25 @@ beforeEach(() => {
 });
 
 it(`attaches a listener and redispatches queries on call`, () => {
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      return {
-        operation: forwardOp,
-        data: queryOneData,
-      };
-    }
-  );
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    return {
+      ...queryResponse,
+      operation: forwardOp,
+      data: queryOneData,
+    };
+  });
 
   let listener;
-  const spy = jest
+  const spy = vi
     .spyOn(window, 'addEventListener')
     .mockImplementation((_keyword, fn) => {
       listener = fn;
     });
-  const reexecuteSpy = jest
+  const reexecuteSpy = vi
     .spyOn(client, 'reexecuteOperation')
     .mockImplementation(() => ({}));
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };

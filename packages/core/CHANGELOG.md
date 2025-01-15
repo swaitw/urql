@@ -1,5 +1,499 @@
 # @urql/core
 
+## 5.1.0
+
+### Minor Changes
+
+- Remove `addMetadata` transform where we'd strip out metadata for production environments, this particularly affects `OperationResult.context.metadata.cacheOutcome`
+  Submitted by [@alpavlove](https://github.com/alpavlove) (See [#3714](https://github.com/urql-graphql/urql/pull/3714))
+
+## 5.0.8
+
+### Patch Changes
+
+- ⚠️ Fix `deepMerge` regression on array values
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3696](https://github.com/urql-graphql/urql/pull/3696))
+
+## 5.0.7
+
+### Patch Changes
+
+- Remove `for-of` syntax from `@urql/core` helpers for JSC memory reduction
+  Submitted by [@kitten](https://github.com/kitten) (See [#3690](https://github.com/urql-graphql/urql/pull/3690))
+
+## 5.0.6
+
+### Patch Changes
+
+- Allow empty error messages when re-hydrating GraphQL errors
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3650](https://github.com/urql-graphql/urql/pull/3650))
+
+## 5.0.5
+
+### Patch Changes
+
+- Removes double serialization of `data` in `ssrExchange`
+  Submitted by [@negezor](https://github.com/negezor) (See [#3632](https://github.com/urql-graphql/urql/pull/3632))
+
+## 5.0.4
+
+### Patch Changes
+
+- Change how we calculate the `OperationKey` to take files into account, before we
+  would encode them to `null` resulting in every mutation with the same variables
+  (excluding the files) to have the same key. This resulted in mutations that upload
+  different files at the same time to share a result in GraphCache
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3601](https://github.com/urql-graphql/urql/pull/3601))
+
+## 5.0.3
+
+### Patch Changes
+
+- Use `documentId` from persisted documents for document keys, when it's available
+  Submitted by [@kitten](https://github.com/kitten) (See [#3575](https://github.com/urql-graphql/urql/pull/3575))
+
+## 5.0.2
+
+### Patch Changes
+
+- ⚠️ Fix issue where a reexecute on an in-flight operation would lead to multiple network-requests.
+  For example, this issue presents itself when Graphcache is concurrently updating multiple, inter-dependent queries with shared entities. One query completing while others are still in-flight may lead to duplicate operations being issued
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3573](https://github.com/urql-graphql/urql/pull/3573))
+
+## 5.0.1
+
+### Patch Changes
+
+- ⚠️ Fix `@ts-ignore` on TypeScript peer dependency import in typings not being applied due to a leading `!` character
+  Submitted by [@kitten](https://github.com/kitten) (See [#3567](https://github.com/urql-graphql/urql/pull/3567))
+
+## 5.0.0
+
+### Major Changes
+
+- Remove deprecated `dedupExchange`
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3520](https://github.com/urql-graphql/urql/pull/3520))
+- Remove deprecated `maskTypename`
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3520](https://github.com/urql-graphql/urql/pull/3520))
+
+### Patch Changes
+
+- Upgrade `@0no-co/graphql.web` to `1.0.5`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3553](https://github.com/urql-graphql/urql/pull/3553))
+
+## 4.3.0
+
+### Minor Changes
+
+- Support [Apollo Federation's format](https://www.apollographql.com/docs/router/executing-operations/subscription-multipart-protocol/) for subscription results in `multipart/mixed` responses (result properties essentially are namespaced on a `payload` key)
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3499](https://github.com/urql-graphql/urql/pull/3499))
+- Add support for sending persisted documents. Any `DocumentNode` with no/empty definitions and a `documentId` property is considered a persisted document. When this is detected a `documentId` parameter rather than a `query` string is sent to the GraphQL API, similar to Automatic Persisted Queries (APQs). However, APQs are only supported via `@urql/exchange-persisted`, while support for `documentId` is now built-in
+  Submitted by [@kitten](https://github.com/kitten) (See [#3515](https://github.com/urql-graphql/urql/pull/3515))
+
+### Patch Changes
+
+- Allow `url` to be a plain, non-URL pathname (i.e. `/api/graphql`) to be used with `preferGetMethod`
+  Submitted by [@akrantz01](https://github.com/akrantz01) (See [#3514](https://github.com/urql-graphql/urql/pull/3514))
+- Correctly support the `Headers` class being used in `fetchOptions`
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3505](https://github.com/urql-graphql/urql/pull/3505))
+
+## 4.2.3
+
+### Patch Changes
+
+- Add back our cache-outcome on the document-cache, this was behind a development flag however in our normalized cache we always add it already
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3464](https://github.com/urql-graphql/urql/pull/3464))
+
+## 4.2.2
+
+### Patch Changes
+
+- ⚠️ Fix the default `cacheExchange` crashing on `cache-only` request policies with cache misses due to `undefined` results
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3459](https://github.com/urql-graphql/urql/pull/3459))
+
+## 4.2.1
+
+### Patch Changes
+
+- ⚠️ Fix incorrect JSON stringification of objects from different JS contexts. This could lead to invalid variables being generated in the Vercel Edge runtime specifically
+  Submitted by [@SoraKumo001](https://github.com/SoraKumo001) (See [#3453](https://github.com/urql-graphql/urql/pull/3453))
+
+## 4.2.0
+
+### Minor Changes
+
+- Try to parse `text/plain` content-type as JSON before bailing out with an error
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3430](https://github.com/urql-graphql/urql/pull/3430))
+
+## 4.1.4
+
+### Patch Changes
+
+- Implement new `@defer` / `@stream` transport protocol spec changes
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3389](https://github.com/urql-graphql/urql/pull/3389))
+- Support non spec-compliant error bodies, i.e. the Shopify API does return `errors` but as an object. Adding
+  a check whether we are really dealing with an Array of errors enables this
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3395](https://github.com/urql-graphql/urql/pull/3395))
+- ⚠️ Fix `preferGetMethod: 'force' | 'within-url-limit'` not being applied correctly by the `Client`
+  Submitted by [@Burbenog](https://github.com/Burbenog) (See [#3403](https://github.com/urql-graphql/urql/pull/3403))
+
+## 4.1.3
+
+### Patch Changes
+
+- ⚠️ Fix missing `teardown` operation handling in the `ssrExchange`. This could lead to duplicate network operations being executed
+  Submitted by [@kitten](https://github.com/kitten) (See [#3386](https://github.com/urql-graphql/urql/pull/3386))
+
+## 4.1.2
+
+### Patch Changes
+
+- Explicitly unblock `client.reexecuteOperation` calls to allow stalled operations from continuing and re-executing. Previously, this could cause `@urql/exchange-graphcache` to stall if an optimistic mutation led to a cache miss
+  Submitted by [@kitten](https://github.com/kitten) (See [#3363](https://github.com/urql-graphql/urql/pull/3363))
+
+## 4.1.1
+
+### Patch Changes
+
+- Add case for `subscriptionExchange` to handle `GraphQLError[]` received in the `error` observer callback.
+  **Note:** This doesn't strictly check for the `GraphQLError` shape and only checks for arrays and receiving errors in the `ExecutionResult` on the `next` observer callback is preferred and recommended for transports
+  Submitted by [@kitten](https://github.com/kitten) (See [#3346](https://github.com/urql-graphql/urql/pull/3346))
+
+## 4.1.0
+
+### Minor Changes
+
+- Update `formatDocument` to output `FormattedNode` type mapping. The formatter will now annotate added `__typename` fields with `_generated: true`, place selection nodes' directives onto a `_directives` dictionary, and will filter directives to not include `"_"` underscore prefixed directives in the final query. This prepares us for a feature that allows enhanced client-side directives in Graphcache
+  Submitted by [@kitten](https://github.com/kitten) (See [#3317](https://github.com/urql-graphql/urql/pull/3317))
+
+### Patch Changes
+
+- Add `OperationContext.optimistic` flag as an internal indication on whether a mutation triggered an optimistic update in `@urql/exchange-graphcache`'s `cacheExchange`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3308](https://github.com/urql-graphql/urql/pull/3308))
+
+## 4.0.11
+
+### Patch Changes
+
+- Re-order `maskTypename` to apply masking earlier in the chain
+  Submitted by [@kitten](https://github.com/kitten) (See [#3298](https://github.com/urql-graphql/urql/pull/3298))
+- ⚠️ Fix `ssrExchange` not formatting query documents using `formatDocument`. Without this call we'd run the risk of not having `__typename` available on the client-side when rehydrating
+  Submitted by [@kitten](https://github.com/kitten) (See [#3288](https://github.com/urql-graphql/urql/pull/3288))
+- Add deprecation notice for `maskTypename` option.
+  Masking typenames in a result is no longer recommended. It’s only
+  useful when multiple pre-conditions are applied and inferior to
+  mapping to an input object manually
+  Submitted by [@kitten](https://github.com/kitten) (See [#3299](https://github.com/urql-graphql/urql/pull/3299))
+
+## 4.0.10
+
+### Patch Changes
+
+- Add missing `fetchSubscriptions` entry to `OperationContext`. The Client’s `fetchSubscriptions` now works properly and can be used to execute subscriptions as multipart/event-stream requests
+  Submitted by [@kitten](https://github.com/kitten) (See [#3244](https://github.com/urql-graphql/urql/pull/3244))
+- ⚠️ Fix `fetchSource` not working for subscriptions since `hasNext` isn’t necessarily set
+  Submitted by [@kitten](https://github.com/kitten) (See [#3244](https://github.com/urql-graphql/urql/pull/3244))
+
+## 4.0.9
+
+### Patch Changes
+
+- Return `AbortController` invocation to previous behaviour where it used to be more forceful. It will now properly abort outside of when our generator yields results, and hence now also cancels requests again that have already delivered headers but are currently awaiting a response body
+  Submitted by [@kitten](https://github.com/kitten) (See [#3239](https://github.com/urql-graphql/urql/pull/3239))
+
+## 4.0.8
+
+### Patch Changes
+
+- Respect `additionalTypenames` on subscriptions and re-execute queries for them as well, as one would intuitively expect
+  Submitted by [@kitten](https://github.com/kitten) (See [#3230](https://github.com/urql-graphql/urql/pull/3230))
+- Update build process to generate correct source maps
+  Submitted by [@kitten](https://github.com/kitten) (See [#3201](https://github.com/urql-graphql/urql/pull/3201))
+- Don't allow `isSubscriptionOperation` option in `subscriptionExchange` to include `teardown` operations, to avoid confusion
+  Submitted by [@kitten](https://github.com/kitten) (See [#3206](https://github.com/urql-graphql/urql/pull/3206))
+
+## 4.0.7
+
+### Patch Changes
+
+- Publish with npm provenance
+  Submitted by [@kitten](https://github.com/kitten) (See [#3180](https://github.com/urql-graphql/urql/pull/3180))
+
+## 4.0.6
+
+### Patch Changes
+
+- Handle `multipart/mixed` variations starting with boundary rather than CRLF and a boundary
+  Submitted by [@kitten](https://github.com/kitten) (See [#3172](https://github.com/urql-graphql/urql/pull/3172))
+- ⚠️ Fix regression which would disallow `network-only` operations after `cache-and-network` completed
+  Submitted by [@kitten](https://github.com/kitten) (See [#3174](https://github.com/urql-graphql/urql/pull/3174))
+
+## 4.0.5
+
+### Patch Changes
+
+- Replace `File` and `Blob` objects with `null` in variables if multipart request will be started
+  Submitted by [@kitten](https://github.com/kitten) (See [#3169](https://github.com/urql-graphql/urql/pull/3169))
+- Strictly deduplicate `cache-and-network` and `network-only` operations, while a non-stale response is being waited for
+  Submitted by [@kitten](https://github.com/kitten) (See [#3157](https://github.com/urql-graphql/urql/pull/3157))
+- ⚠️ Fix boundary stopping `multipart/mixed` streams when it randomly occurs in response payloads
+  Submitted by [@kitten](https://github.com/kitten) (See [#3155](https://github.com/urql-graphql/urql/pull/3155))
+- Improve dispatching of arbitrary operations using `reexecuteOperation`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3159](https://github.com/urql-graphql/urql/pull/3159))
+
+## 4.0.4
+
+### Patch Changes
+
+- ⚠️ Fix `hasNext` being defaulted to `false` when a new subscription event is received on the `subscriptionExchange` that doesn't have `hasNext` set
+  Submitted by [@kitten](https://github.com/kitten) (See [#3137](https://github.com/urql-graphql/urql/pull/3137))
+
+## 4.0.3
+
+### Patch Changes
+
+- Handle `fetch` rejections in `makeFetchSource` and properly hand them over to `CombinedError`s
+  Submitted by [@kitten](https://github.com/kitten) (See [#3131](https://github.com/urql-graphql/urql/pull/3131))
+
+## 4.0.2
+
+### Patch Changes
+
+- ⚠️ Fix incremental delivery payloads not merging data correctly, or not handling patches on root
+  results
+  Submitted by [@kitten](https://github.com/kitten) (See [#3124](https://github.com/urql-graphql/urql/pull/3124))
+
+## 4.0.1
+
+### Patch Changes
+
+- ⚠️ Fix format of `map` form data field on multipart upload requests. This was erroneously set to a string rather than a string tuple
+  Submitted by [@kitten](https://github.com/kitten) (See [#3118](https://github.com/urql-graphql/urql/pull/3118))
+
+## 4.0.0
+
+### Major Changes
+
+- Remove `defaultExchanges` from `@urql/core` and make `exchanges` a required property on `Client` construction.
+  In doing so we make the `urql` package more tree-shakeable as the three default exchanges are in no code paths
+  meaning they can be removed if not used.
+  A migration would look as follows if you are currently creating a client without exchanges
+
+  ```js
+  import { createClient, cacheExchange, fetchExchange } from '@urql/core';
+
+  const client = createClient({
+    url: '',
+    exchanges: [cacheExchange, fetchExchange],
+  });
+  ```
+
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3033](https://github.com/urql-graphql/urql/pull/3033))
+
+- Update `subscriptionExchange` to receive `FetchBody` instead. In the usual usage of `subscriptionExchange` (for instance with `graphql-ws`) you can expect no breaking changes. However, the `key` and `extensions` field has been removed and instead the `forwardSubscription` function receives the full `Operation` as a second argument
+  Submitted by [@kitten](https://github.com/kitten) (See [#3054](https://github.com/urql-graphql/urql/pull/3054))
+- Remove dependence on `graphql` package and replace it with `@0no-co/graphql.web`, which reduces the default bundlesize impact of `urql` packages to a minimum. All types should remain compatible, even if you use `graphql` elsewhere in your app, and if other dependencies are using `graphql` you may alias it to `graphql-web-lite`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3097](https://github.com/urql-graphql/urql/pull/3097))
+- Update `OperationResult.hasNext` and `OperationResult.stale` to be required fields. If you have a custom exchange creating results, you'll have to add these fields or use the `makeResult`, `mergeResultPatch`, or `makeErrorResult` helpers
+  Submitted by [@kitten](https://github.com/kitten) (See [#3061](https://github.com/urql-graphql/urql/pull/3061))
+- Remove `getOperationName` export from `@urql/core`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3062](https://github.com/urql-graphql/urql/pull/3062))
+
+### Minor Changes
+
+- Return a new `OperationResultSource` from all `Client` methods (which replaces `PromisifiedSource` on shortcut methods). This allows not only `toPromise()` to be called, but it can also be used as an awaitable `PromiseLike` and has a `.subscribe(onResult)` method aliasing the subscribe utility from `wonka`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3060](https://github.com/urql-graphql/urql/pull/3060))
+- Update `subscriptionExchange` to support incremental results out of the box. If a subscription proactively completes, results are also now updated with `hasNext: false`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3055](https://github.com/urql-graphql/urql/pull/3055))
+- Implement `text/event-stream` response support. This generally adheres to the GraphQL SSE protocol and GraphQL Yoga push responses, and is an alternative to `multipart/mixed`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3050](https://github.com/urql-graphql/urql/pull/3050))
+- Implement GraphQL Multipart Request support in `@urql/core`. This adds the File/Blob upload support to `@urql/core`, which effectively deprecates `@urql/exchange-multipart-fetch`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3051](https://github.com/urql-graphql/urql/pull/3051))
+- Support `GraphQLRequest.extensions` as spec-extensions input to GraphQL requests
+  Submitted by [@kitten](https://github.com/kitten) (See [#3054](https://github.com/urql-graphql/urql/pull/3054))
+- Allow subscriptions to be handled by the `fetchExchange` when `fetchSubscriptions` is turned on
+  Submitted by [@kitten](https://github.com/kitten) (See [#3106](https://github.com/urql-graphql/urql/pull/3106))
+- Deprecate the `dedupExchange`. The functionality of deduplicating queries and subscriptions has now been moved into and absorbed by the `Client`.
+  Previously, the `Client` already started doing some work to share results between
+  queries, and to avoid dispatching operations as needed. It now only dispatches operations
+  strictly when the `dedupExchange` would allow so as well, moving its logic into the
+  `Client`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3058](https://github.com/urql-graphql/urql/pull/3058))
+
+### Patch Changes
+
+- Deduplicate operations as the `dedupExchange` did; by filtering out duplicate operations until either the original operation has been cancelled (teardown) or a first result (without `hasNext: true`) has come in
+  Submitted by [@kitten](https://github.com/kitten) (See [#3101](https://github.com/urql-graphql/urql/pull/3101))
+- ⚠️ Fix source maps included with recently published packages, which lost their `sourcesContent`, including additional source files, and had incorrect paths in some of them
+  Submitted by [@kitten](https://github.com/kitten) (See [#3053](https://github.com/urql-graphql/urql/pull/3053))
+- Allow `makeOperation` to be called with a partial `OperationContext` when it’s called to copy an operation. When it receives an `Operation` as a second argument now, the third argument, the context, will be spread into the prior `operation.context`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3081](https://github.com/urql-graphql/urql/pull/3081))
+- Move `multipart/mixed` to end of `Accept` header to avoid cauing Yoga to unnecessarily use it
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3039](https://github.com/urql-graphql/urql/pull/3039))
+- Upgrade to `wonka@^6.3.0`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3104](https://github.com/urql-graphql/urql/pull/3104))
+- Update `Exchange` contract and `composeExchanges` utility to remove the need to manually call `share` on either incoming `Source<Operation>` or `forward()`’s `Source<OperationResult>`. This is now taken care of internally in `composeExchanges` and should make it easier for you to create custom exchanges and for us to explain them
+  Submitted by [@kitten](https://github.com/kitten) (See [#3082](https://github.com/urql-graphql/urql/pull/3082))
+- Add support for `graphql`’s built-in `TypedQueryDocumentNode` typings for type inference
+  Submitted by [@kitten](https://github.com/kitten) (See [#3085](https://github.com/urql-graphql/urql/pull/3085))
+- Add missing type exports of SSR-related types (`SerializedResult`, `SSRExchangeParams`, `SSRExchange`, and `SSRData`) to `@urql/core`'s type exports
+  Submitted by [@kitten](https://github.com/kitten) (See [#3079](https://github.com/urql-graphql/urql/pull/3079))
+- Allow any object fitting the `GraphQLError` shape to rehydrate without passing through a `GraphQLError` constructor in `CombinedError`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3087](https://github.com/urql-graphql/urql/pull/3087))
+- Add missing `hasNext` and `stale` passthroughs on caching exchanges
+  Submitted by [@kitten](https://github.com/kitten) (See [#3059](https://github.com/urql-graphql/urql/pull/3059))
+- ⚠️ Fix incremental results not merging `errors` from subsequent non-incremental results
+  Submitted by [@kitten](https://github.com/kitten) (See [#3055](https://github.com/urql-graphql/urql/pull/3055))
+- Add logic for `request.extensions.persistedQuery` to `@urql/core` to omit sending `query` as needed
+  Submitted by [@kitten](https://github.com/kitten) (See [#3057](https://github.com/urql-graphql/urql/pull/3057))
+- ⚠️ Fix incorrect operation name being picked from queries that contain multiple operations
+  Submitted by [@kitten](https://github.com/kitten) (See [#3062](https://github.com/urql-graphql/urql/pull/3062))
+- Replace fetch source implementation with async generator implementation, based on Wonka's `fromAsyncIterable`.
+  This also further hardens our support for the "Incremental Delivery" specification and
+  refactors its implementation and covers more edge cases
+  Submitted by [@kitten](https://github.com/kitten) (See [#3043](https://github.com/urql-graphql/urql/pull/3043))
+- Ensure network errors are always issued with `CombinedError`s, while downstream errors are re-thrown
+  Submitted by [@kitten](https://github.com/kitten) (See [#3063](https://github.com/urql-graphql/urql/pull/3063))
+- Refactor `Client` result source construction code and allow multiple mutation
+  results, if `result.hasNext` on a mutation result is set to `true`, indicating
+  deferred or streamed results
+  Submitted by [@kitten](https://github.com/kitten) (See [#3102](https://github.com/urql-graphql/urql/pull/3102))
+- Remove dependence on `import { visit } from 'graphql';` with smaller but functionally equivalent alternative
+  Submitted by [@kitten](https://github.com/kitten) (See [#3097](https://github.com/urql-graphql/urql/pull/3097))
+
+## 3.2.2
+
+### Patch Changes
+
+- ⚠️ Fix generated empty `Variables` type as passed to generics, that outputs a type of `{ [var: string]: never; }`.
+  A legacy/unsupported version of `typescript-urql`, which wraps `urql`'s React hooks, generates
+  empty variables types as the following code snippet, which is not detected:
+  ```ts
+  type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+  type Variables = Exact<{ [key: string]: never }>;
+  ```
+  Submitted by [@kitten](https://github.com/kitten) (See [#3029](https://github.com/urql-graphql/urql/pull/3029))
+
+## 3.2.1
+
+### Patch Changes
+
+- Bump to `@urql/core@3.2.1` due to invalid `3.2.0` release
+  Submitted by [@kitten](https://github.com/kitten) (See [`a84268db`](https://github.com/urql-graphql/urql/commit/a84268db98789b2fd23de009c7b5e1c09fca7103))
+
+## 3.2.0
+
+### Minor Changes
+
+- Update support for the "Incremental Delivery" payload specification, accepting the new `incremental` property on execution results, as per the specification. This will expand support for newer APIs implementing the more up-to-date specification
+  Submitted by [@kitten](https://github.com/kitten) (See [#3007](https://github.com/urql-graphql/urql/pull/3007))
+- Update default `Accept` header to include `multipart/mixed` and `application/graphql-response+json`. The former seems to now be a defactor standard-accepted indication for support of the "Incremental Delivery" GraphQL over HTTP spec addition/RFC, and the latter is an updated form of the older `Content-Type` of GraphQL responses, so both the old and new one should now be included
+  Submitted by [@kitten](https://github.com/kitten) (See [#3007](https://github.com/urql-graphql/urql/pull/3007))
+
+### Patch Changes
+
+- Add TSDoc annotations to all external `@urql/core` APIs
+  Submitted by [@kitten](https://github.com/kitten) (See [#2962](https://github.com/urql-graphql/urql/pull/2962))
+- ⚠️ Fix subscriptions not being duplicated when `hasNext` isn't set. The `hasNext` field is an upcoming "Incremental Delivery" field. When a subscription result doesn't set it we now set it to `true` manually. This indicates to the `dedupExchange` that no duplicate subscription operations should be started
+  Submitted by [@kitten](https://github.com/kitten) (See [#3015](https://github.com/urql-graphql/urql/pull/3015))
+- Expose consistent `GraphQLRequestParams` utility type from which `GraphQLRequest`s are created in all bindings
+  Submitted by [@kitten](https://github.com/kitten) (See [#3022](https://github.com/urql-graphql/urql/pull/3022))
+
+## 3.1.1
+
+### Patch Changes
+
+- Correctly mark cache-hits from the ssr-exchange, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2872](https://github.com/urql-graphql/urql/pull/2872))
+- ⚠️ Fix type-generation, with a change in TS/Rollup the type generation took the paths as src and resolved them into the types dir, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2870](https://github.com/urql-graphql/urql/pull/2870))
+- ⚠️ Fix regression in `@urql/core`'s `stringifyDocument` that caused some formatted documents to not be reprinted, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2871](https://github.com/urql-graphql/urql/pull/2871))
+
+## 3.1.0
+
+### Minor Changes
+
+- Implement `mapExchange`, which replaces `errorExchange`, allowing `onOperation` and `onResult` to be called to either react to or replace operations and results. For backwards compatibility, this exchange is also exported as `errorExchange` and supports `onError`, by [@kitten](https://github.com/kitten) (See [#2846](https://github.com/urql-graphql/urql/pull/2846))
+
+### Patch Changes
+
+- Move remaining `Variables` generics over from `object` default to `Variables extends AnyVariables = AnyVariables`. This has been introduced previously in [#2607](https://github.com/urql-graphql/urql/pull/2607) but some missing ports have been missed due to TypeScript not catching them previously. Depending on your TypeScript version the `object` default is incompatible with `AnyVariables`, by [@kitten](https://github.com/kitten) (See [#2843](https://github.com/urql-graphql/urql/pull/2843))
+- Reuse output of `stringifyDocument` in place of repeated `print`. This will mean that we now prevent calling `print` repeatedly for identical operations and are instead only reusing the result once.
+  This change has a subtle consequence of our internals. Operation keys will change due to this
+  refactor and we will no longer sanitise strip newlines from queries that `@urql/core` has printed, by [@kitten](https://github.com/kitten) (See [#2847](https://github.com/urql-graphql/urql/pull/2847))
+- Update to `wonka@^6.1.2` to fix memory leak in `fetch` caused in Node.js by a lack of clean up after initiating a request, by [@kitten](https://github.com/kitten) (See [#2850](https://github.com/urql-graphql/urql/pull/2850))
+
+## 3.0.5
+
+### Patch Changes
+
+- Update typings of the client to encompass the changes of https://github.com/FormidableLabs/urql/pull/2692, by [@c-schwan](https://github.com/c-schwan) (See [#2758](https://github.com/FormidableLabs/urql/pull/2758))
+- ⚠️ Fix case where our transform-debug-target babel plugin would override the root dispatchDebug in `compose.ts` with the latest found exchange, in this case `fetchExchange`, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2762](https://github.com/FormidableLabs/urql/pull/2762))
+
+## 3.0.4
+
+### Patch Changes
+
+- ⚠️ Fix `ssrExchange` bug which prevented `staleWhileRevalidate` from sending off requests as network-only requests, and caused unrelated `network-only` operations to be dropped, by [@kitten](https://github.com/kitten) (See [#2691](https://github.com/FormidableLabs/urql/pull/2691))
+- Allow URL limit for GET requests to be bypassed using `preferGetMethod: 'force'` rather than the default `true` or `'within-url-limit'` value, by [@kitten](https://github.com/kitten) (See [#2692](https://github.com/FormidableLabs/urql/pull/2692))
+- ⚠️ Fix operation identities preventing users from deeply cloning operation contexts. Instead, we now use a client-wide counter (rolling over as needed).
+  While this changes an internal data structure in `@urql/core` only, this change also affects the `offlineExchange` in `@urql/exchange-graphcache` due to it relying on the identity being previously an object rather than an integer, by [@kitten](https://github.com/kitten) (See [#2732](https://github.com/FormidableLabs/urql/pull/2732))
+
+## 3.0.3
+
+### Patch Changes
+
+- ⚠️ Fix variable types in core makeOperation, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2665](https://github.com/FormidableLabs/urql/pull/2665))
+
+## 3.0.2
+
+### Patch Changes
+
+- ⚠️ Fix case where `maskTypename` would not traverse down when the root query-field does not contain a `__typename`, by [@mlecoq](https://github.com/mlecoq) (See [#2643](https://github.com/FormidableLabs/urql/pull/2643))
+
+## 3.0.1
+
+### Patch Changes
+
+- ⚠️ fix setting a client default requestPolicy, we set `context.requestPolicy: undefined`
+  from our bindings which makes a spread override the client-set default, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2634](https://github.com/FormidableLabs/urql/pull/2634))
+
+## 3.0.0
+
+### Major Changes
+
+- **Goodbye IE11!** 👋 This major release removes support for IE11. All code that is shipped will be transpiled much less and will _not_ be ES5-compatible anymore, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+- Remove support for options on the `Client` and `Client.createOperationContext`. We've noticed that there's no real need for `createOperationContext` or the options on the `Client` and that it actually encourages modifying properties on the `Client` that are really meant to be modified dynamically via exchanges, by [@kitten](https://github.com/kitten) (See [#2619](https://github.com/FormidableLabs/urql/pull/2619))
+- Implement stricter variables types, which require variables to always be passed and match TypeScript types when the generic is set or inferred. This is a breaking change for TypeScript users potentially, unless all types are adhered to, by [@kitten](https://github.com/kitten) (See [#2607](https://github.com/FormidableLabs/urql/pull/2607))
+- Upgrade to [Wonka v6](https://github.com/0no-co/wonka) (`wonka@^6.0.0`), which has no breaking changes but is built to target ES2015 and comes with other minor improvements.
+  The library has fully been migrated to TypeScript which will hopefully help with making contributions easier!, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+
+### Minor Changes
+
+- Remove the `babel-plugin-modular-graphql` helper, this because the graphql package hasn't converted to ESM yet which gives issues in node environments, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2551](https://github.com/FormidableLabs/urql/pull/2551))
+
+## 2.6.1
+
+### Patch Changes
+
+- ⚠️ Fix missing React updates after an incoming response that schedules a mount. We now prevent dispatched operations from continuing to flush synchronously when the original source that runs the queue has terminated. This is important for the React bindings, because an update (e.g. `setState`) may recursively schedule a mount, which then disabled other `setState` updates from being processed. Previously we assumed that React used a trampoline scheduler for updates, however it appears that `setState` can recursively start more React work, by [@kitten](https://github.com/kitten) (See [#2556](https://github.com/FormidableLabs/urql/pull/2556))
+
+## 2.6.0
+
+### Minor Changes
+
+- Allow providing a custom `isSubscriptionOperation` implementation, by [@n1ru4l](https://github.com/n1ru4l) (See [#2534](https://github.com/FormidableLabs/urql/pull/2534))
+
+## 2.5.0
+
+### Minor Changes
+
+- Add `Accept` header to GraphQL HTTP requests. This complies to the specification but doesn't go as far as sending `Content-Type` which would throw a lot of APIs off. Instead, we'll now be sending an accept header for `application/graphql+json, application/json` to indicate that we comply with the GraphQL over HTTP protocol.
+  This also fixes headers merging to allow overriding `Accept` and `Content-Type` regardless of the user options' casing, by [@kitten](https://github.com/kitten) (See [#2457](https://github.com/FormidableLabs/urql/pull/2457))
+
+### Patch Changes
+
+- Support aborting in `withPromise` cases, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2446](https://github.com/FormidableLabs/urql/pull/2446))
+- Passthrough responses with content type of `text/*` as error messages, by [@kitten](https://github.com/kitten) (See [#2456](https://github.com/FormidableLabs/urql/pull/2456))
+
 ## 2.4.4
 
 ### Patch Changes

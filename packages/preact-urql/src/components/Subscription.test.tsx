@@ -1,29 +1,36 @@
+// @vitest-environment jsdom
+
 import { h } from 'preact';
-import { cleanup, render } from '@testing-library/preact';
+import { cleanup, render, act } from '@testing-library/preact';
 import { map, interval, pipe } from 'wonka';
+import { vi, expect, it, beforeEach, describe, afterEach } from 'vitest';
+
 import { Provider } from '../context';
 import { Subscription } from './Subscription';
 
 const query = 'subscription Example { example }';
 const client = {
-  executeSubscription: jest.fn(() =>
-    pipe(
+  executeSubscription: vi.fn(() => {
+    return pipe(
       interval(200),
       map((i: number) => ({ data: i, error: i + 1 }))
-    )
-  ),
+    );
+  }),
 };
 
 describe('Subscription', () => {
   beforeEach(() => {
-    jest.spyOn(global.console, 'error').mockImplementation();
+    vi.useFakeTimers();
+    vi.spyOn(globalThis.console, 'error').mockImplementation(() => {
+      // do nothing
+    });
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('Should execute the subscription', done => {
+  it('Should execute the subscription', () => {
     let props = {};
     const Test = () => h('p', {}, 'hi');
     const App = () => {
@@ -40,15 +47,19 @@ describe('Subscription', () => {
         ],
       });
     };
+
     render(h(App, {}));
+
     expect(props).toStrictEqual({
       data: undefined,
       fetching: true,
       error: undefined,
     });
-    setTimeout(() => {
-      expect(props).toStrictEqual({ data: 0, fetching: true, error: 1 });
-      done();
-    }, 300);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(props).toStrictEqual({ data: 0, fetching: true, error: 1 });
   });
 });

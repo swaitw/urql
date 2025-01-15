@@ -1,7 +1,9 @@
 import { DocumentNode } from 'graphql';
 import { gql } from '@urql/core';
-import { query, write } from '../operations';
-import { Store } from '../store';
+import { it, expect } from 'vitest';
+import { __initAnd_query as query } from '../operations/query';
+import { __initAnd_write as write } from '../operations/write';
+import { Store } from '../store/store';
 
 interface TestCase {
   query: DocumentNode;

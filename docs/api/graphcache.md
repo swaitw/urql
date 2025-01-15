@@ -5,6 +5,11 @@ order: 4
 
 # @urql/exchange-graphcache
 
+> **Note:** These API docs are deprecated as we now keep TSDocs in all published packages.
+> You can view TSDocs while using these packages in your editor, as long as it supports the
+> TypeScript Language Server.
+> We're planning to replace these API docs with a separate web app soon.
+
 The `@urql/exchange-graphcache` package contains an addon `cacheExchange` for `urql` that may be
 used to replace the default [`cacheExchange`](./core.md#cacheexchange), which switches `urql` from
 using ["Document Caching"](../basics/document-caching.md) to ["Normalized
@@ -22,10 +27,13 @@ options and returns an [`Exchange`](./core.md#exchange).
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `keys`       | A mapping of key generator functions for types that are used to override the default key generation that _Graphcache_ uses to normalize data for given types.                                                                 |
 | `resolvers`  | A nested mapping of resolvers, which are used to override the record or entity that _Graphcache_ resolves for a given field for a type.                                                                                       |
+| `directives` | A mapping of directives, which are functions accepting directive arguments and returning a resolver, which can be referenced by `@localDirective` or `@_localDirective` in queries.                                           |
 | `updates`    | A nested mapping of updater functions for mutation and subscription fields, which may be used to add side-effects that update other parts of the cache when the given subscription or mutation field is written to the cache. |
 | `optimistic` | A mapping of mutation fields to resolvers that may be used to provide _Graphcache_ with an optimistic result for a given mutation field that should be applied to the cached data temporarily.                                |
 | `schema`     | A serialized GraphQL schema that is used by _Graphcache_ to resolve partial data, interfaces, and enums. The schema also used to provide helpful warnings for [schema awareness](../graphcache/schema-awareness.md).          |
 | `storage`    | A persisted storage interface that may be provided to preserve cache data for [offline support](../graphcache/offline.md).                                                                                                    |
+| `globalIDs`  | A boolean or list of typenames that have globally unique ids, this changes how graphcache internally keys the entities. This can be useful for complex interface relationships.                                               |
+| `logger`     | A function that will be invoked for warning/debug/... logs                                                                                                                                                                    |
 
 The `@urql/exchange-graphcache` package also exports the `offlineExchange`; which is identical to
 the `cacheExchange` but activates [offline support](../graphcache/offline.md) when the `storage` option is passed.
@@ -145,11 +153,11 @@ interface OptimisticMutationConfig {
 A `OptimisticMutationResolver` receives three arguments when it's called: `variables`, `cache`, and
 `info`.
 
-| Argument    | Type     | Description                                                                                                 |
-| ----------- | -------- | ----------------------------------------------------------------------------------------------------------- |
-| `variables` | `object` | The variables that the given mutation received.                                                             |
-| `cache`     | `Cache`  | The cache using which data can be read or written. [See `Cache`.](#cache)                                   |
-| `info`      | `Info`   | Additional metadata and information about the current operation and the current field. [See `Info`.](#info) |
+| Argument | Type     | Description                                                                                                 |
+| -------- | -------- | ----------------------------------------------------------------------------------------------------------- |
+| `args`   | `object` | The arguments that the given mutation field received.                                                       |
+| `cache`  | `Cache`  | The cache using which data can be read or written. [See `Cache`.](#cache)                                   |
+| `info`   | `Info`   | Additional metadata and information about the current operation and the current field. [See `Info`.](#info) |
 
 [Read more about how to set up `optimistic` on the "Custom Updates"
 page.](../graphcache/cache-updates.md)
@@ -172,13 +180,14 @@ the cache's data to persisted storage on the user's device. it
 > **NOTE:** Offline Support is currently experimental! It hasn't been extensively tested yet and
 > may not always behave as expected. Please try it out with caution!
 
-| Method          | Type                                          | Description                                                                                                                                                                            |
-| --------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `writeData`     | `(delta: SerializedEntries) => Promise<void>` | This provided method must be able to accept an object of key-value entries that will be persisted to the storage. This method is called as a batch of updated entries becomes ready.   |
-| `readData`      | `() => Promise<SerializedEntries>`            | This provided method must be able to return a single combined object of previous key-value entries that have been previously preserved using `writeData`. It's only called on startup. |
-| `writeMetadata` | `(json: SerializedRequest[]) => void`         | This provided method must be able to persist metadata for the cache. For backwards compatibility it should be able to accept any JSON data.                                            |
-| `readMetadata`  | `() => Promise<null \| SerializedRequest[]>`  | This provided method must be able to read the persisted metadata that has previously been written using `writeMetadata`. It's only called on startup.                                  |
-| `onOnline`      | `(cb: () => void) => void`                    | This method must be able to accept a callback that is called when the user's device comes back online.                                                                                 |
+| Method            | Type                                          | Description                                                                                                                                                                            |
+| ----------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `writeData`       | `(delta: SerializedEntries) => Promise<void>` | This provided method must be able to accept an object of key-value entries that will be persisted to the storage. This method is called as a batch of updated entries becomes ready.   |
+| `readData`        | `() => Promise<SerializedEntries>`            | This provided method must be able to return a single combined object of previous key-value entries that have been previously preserved using `writeData`. It's only called on startup. |
+| `writeMetadata`   | `(json: SerializedRequest[]) => void`         | This provided method must be able to persist metadata for the cache. For backwards compatibility it should be able to accept any JSON data.                                            |
+| `readMetadata`    | `() => Promise<null \| SerializedRequest[]>`  | This provided method must be able to read the persisted metadata that has previously been written using `writeMetadata`. It's only called on startup.                                  |
+| `onOnline`        | `(cb: () => void) => void`                    | This method must be able to accept a callback that is called when the user's device comes back online.                                                                                 |
+| `onCacheHydrated` | `() => void`                                  | This method will be called when the `cacheExchange` has finished hydrating the data coming from storage.                                                                               |
 
 These options are split into three parts:
 
@@ -264,9 +273,7 @@ cache.resolve({ __typename: 'Query' }, cache.keyOfField('todo', { id: 1 })); // 
 ```
 
 This specialized case is likely only going to be useful in combination with
-[`cache.inspectFields`](#inspectfields). Previously a specialised method existed for this
-case specifically and was called `cache.resolveFieldByKey`, which is now deprecated, since
-`cache.resolve` may be called with a field key and no extra arguments.
+[`cache.inspectFields`](#inspectfields).
 
 ### inspectFields
 
@@ -340,6 +347,28 @@ cache.readFragment(
   `,
   { id: 1 }, // this identifies the fragment (User) entity
   { groupId: 5 } // any additional field variables
+);
+```
+
+If you need a specific fragment in a document containing multiple you can leverage
+the fourth argument like this:
+
+```js
+import { gql } from '@urql/core';
+
+cache.readFragment(
+  gql`
+    fragment todoFields on Todo {
+      id
+    }
+
+    fragment userFields on User {
+      id
+    }
+  `,
+  { id: 1 }, // this identifies the fragment (User) entity
+  undefined,
+  'userFields' // if not passed we take the first fragment, in this case todoFields
 );
 ```
 
@@ -429,6 +458,30 @@ cache.writeFragment(
 In the example we can see that the `writeFragment` method returns `undefined`. Furthermore we pass
 `id` in our `data` object so that an entity key can be written, but the fragment itself doesn't have
 to include these fields.
+
+If you need a specific fragment in a document containing multiple you can leverage
+the fourth argument like this:
+
+```js
+import { gql } from '@urql/core';
+
+cache.writeFragment(
+  gql`
+    fragment todoFields on Todo {
+      id
+      text
+    }
+
+    fragment userFields on User {
+      id
+      name
+    }
+  `,
+  { id: 1, name: 'New Name' }
+  undefined,
+  'userFields' // if not passed we take the first fragment, in this case todoFields
+);
+```
 
 [Read more about using `writeFragment` on the ["Custom Updates"
 page.](../graphcache/cache-updates.md#cachewritefragment)

@@ -1,6 +1,6 @@
 import * as InMemoryData from '../store/data';
-import { FieldArgs } from '../types';
-import { keyOfField } from '../store';
+import { keyOfField } from '../store/keys';
+import type { FieldArgs } from '../types';
 
 interface PartialFieldInfo {
   fieldKey: string;
@@ -22,5 +22,16 @@ export const invalidateEntity = (
     } else {
       InMemoryData.writeRecord(entityKey, fieldKey, undefined);
     }
+  }
+};
+
+export const invalidateType = (
+  typename: string,
+  excludedEntities: string[]
+) => {
+  const types = InMemoryData.getEntitiesForType(typename);
+  for (const entity of types) {
+    if (excludedEntities.includes(entity)) continue;
+    invalidateEntity(entity);
   }
 };

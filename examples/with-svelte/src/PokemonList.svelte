@@ -1,8 +1,10 @@
 <script>
-  import { gql, operationStore, query } from "@urql/svelte";
+  import { getContextClient, gql, queryStore } from "@urql/svelte";
 
-  const pokemons = operationStore(
-    gql`
+  let skip = 0;
+  $: pokemons = queryStore({
+    client: getContextClient(),
+    query: gql`
       query ($skip: Int!) {
         pokemons(limit: 10, skip: $skip) {
           id
@@ -10,13 +12,16 @@
         }
       }
     `,
-    { skip: 0 }
-  );
-
-  query(pokemons);
+    variables: { skip },
+    requestPolicy: 'cache-and-network'
+  });
 
   function nextPage() {
-    $pokemons.variables = { skip: $pokemons.variables.skip + 10 };
+    skip = skip + 10;
+  }
+
+  function reexcute() {
+    pokemons.reexecute({ requestPolicy: 'network-only' })
   }
 </script>
 
@@ -33,4 +38,5 @@
     </ul>
   {/if}
   <button on:click={nextPage}>Next Page</button>
+  <button on:click={reexcute}>Reexec</button>
 </div>

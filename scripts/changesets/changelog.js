@@ -3,34 +3,29 @@ const { getInfo } = require('@changesets/get-github-info');
 
 config();
 
-const REPO = 'FormidableLabs/urql';
+const REPO = 'urql-graphql/urql';
 const SEE_LINE = /^See:\s*(.*)/i;
 const TRAILING_CHAR = /[.;:]$/g;
 const listFormatter = new Intl.ListFormat('en-US');
 
 const getSummaryLines = cs => {
-  const lines = cs.summary
-    .trim()
-    .split(/[\r\n]+/)
-    .map(l => l.trim())
-    .filter(Boolean);
-  const size = lines.length;
-  if (size > 0) {
-    lines[size - 1] = lines[size - 1]
-      .replace(TRAILING_CHAR, '');
+  let lines = cs.summary.trim().split(/\r?\n/);
+  if (!lines.some(line => /```/.test(line))) {
+    lines = lines.map(l => l.trim()).filter(Boolean);
+    const size = lines.length;
+    if (size > 0) {
+      lines[size - 1] = lines[size - 1].replace(TRAILING_CHAR, '');
+    }
   }
-
   return lines;
 };
 
 /** Creates a "(See X)" string from a template */
 const templateSeeRef = links => {
-  const humanReadableLinks = links
-    .filter(Boolean)
-    .map(link => {
-      if (typeof link === 'string') return link;
-      return link.pull || link.commit;
-    });
+  const humanReadableLinks = links.filter(Boolean).map(link => {
+    if (typeof link === 'string') return link;
+    return link.pull || link.commit;
+  });
 
   const size = humanReadableLinks.length;
   if (size === 0) return '';
@@ -40,10 +35,7 @@ const templateSeeRef = links => {
 };
 
 const changelogFunctions = {
-  getDependencyReleaseLine: async (
-    changesets,
-    dependenciesUpdated,
-  ) => {
+  getDependencyReleaseLine: async (changesets, dependenciesUpdated) => {
     if (dependenciesUpdated.length === 0) return '';
 
     const dependenciesLinks = await Promise.all(
@@ -59,7 +51,7 @@ const changelogFunctions = {
 
         const { links } = await getInfo({
           repo: REPO,
-          commit: cs.commit
+          commit: cs.commit,
         });
 
         return links;
@@ -93,7 +85,7 @@ const changelogFunctions = {
     if (changeset.commit && !pull) {
       const { links } = await getInfo({
         repo: REPO,
-        commit: changeset.commit
+        commit: changeset.commit,
       });
 
       pull = links.pull || undefined;
@@ -111,8 +103,11 @@ const changelogFunctions = {
       str += `\n${futureLines.map(l => `  ${l}`).join('\n')}`;
     }
 
-    if (user) {
+    const endsWithParagraph = /(?<=(?:[!;?.]|```) *)$/g;
+    if (user && !endsWithParagraph) {
       str += `, by ${user}`;
+    } else {
+      str += `\nSubmitted by ${user}`;
     }
 
     if (pull || commit) {
@@ -121,10 +116,10 @@ const changelogFunctions = {
     }
 
     return str;
-  }
+  },
 };
 
 module.exports = {
   ...changelogFunctions,
-  default: changelogFunctions
+  default: changelogFunctions,
 };

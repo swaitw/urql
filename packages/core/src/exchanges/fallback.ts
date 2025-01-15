@@ -1,34 +1,41 @@
 import { filter, pipe, tap } from 'wonka';
-import { Operation, ExchangeIO, ExchangeInput } from '../types';
-import { noop } from '../utils';
+import type { ExchangeIO, ExchangeInput } from '../types';
 
-/** This is always the last exchange in the chain; No operation should ever reach it */
+/** Used by the `Client` as the last exchange to warn about unhandled operations.
+ *
+ * @remarks
+ * In a normal setup, some operations may go unhandled when a {@link Client} isn’t set up
+ * with the right exchanges.
+ * For instance, a `Client` may be missing a fetch exchange, or an exchange handling subscriptions.
+ * This {@link Exchange} is added by the `Client` automatically to log warnings about unhandled
+ * {@link Operaiton | Operations} in development.
+ */
 export const fallbackExchange: ({
   dispatchDebug,
-}: Pick<ExchangeInput, 'dispatchDebug'>) => ExchangeIO = ({
-  dispatchDebug,
-}) => ops$ =>
-  pipe(
-    ops$,
-    tap<Operation>(operation => {
-      if (
-        operation.kind !== 'teardown' &&
-        process.env.NODE_ENV !== 'production'
-      ) {
-        const message = `No exchange has handled operations of kind "${operation.kind}". Check whether you've added an exchange responsible for these operations.`;
+}: Pick<ExchangeInput, 'dispatchDebug'>) => ExchangeIO =
+  ({ dispatchDebug }) =>
+  ops$ => {
+    if (process.env.NODE_ENV !== 'production') {
+      ops$ = pipe(
+        ops$,
+        tap(operation => {
+          if (
+            operation.kind !== 'teardown' &&
+            process.env.NODE_ENV !== 'production'
+          ) {
+            const message = `No exchange has handled operations of kind "${operation.kind}". Check whether you've added an exchange responsible for these operations.`;
 
-        dispatchDebug({
-          type: 'fallbackCatch',
-          message,
-          operation,
-        });
-        console.warn(message);
-      }
-    }),
-    /* All operations that skipped through the entire exchange chain should be filtered from the output */
-    filter<any>(() => false)
-  );
+            dispatchDebug({
+              type: 'fallbackCatch',
+              message,
+              operation,
+            });
+            console.warn(message);
+          }
+        })
+      );
+    }
 
-export const fallbackExchangeIO: ExchangeIO = fallbackExchange({
-  dispatchDebug: noop,
-});
+    // All operations that skipped through the entire exchange chain should be filtered from the output
+    return filter((_x): _x is never => false)(ops$);
+  };

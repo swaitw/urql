@@ -1,25 +1,38 @@
+// @vitest-environment jsdom
+
 import { FunctionalComponent as FC, h } from 'preact';
 import { render, cleanup, act } from '@testing-library/preact';
 import { OperationContext } from '@urql/core';
-import { useSubscription, UseSubscriptionState } from './useSubscription';
+import {
+  vi,
+  expect,
+  it,
+  beforeEach,
+  describe,
+  beforeAll,
+  Mock,
+  afterEach,
+} from 'vitest';
 import { merge, fromValue, never, empty } from 'wonka';
+
+import { useSubscription, UseSubscriptionState } from './useSubscription';
 import { Provider } from '../context';
 
 const data = { data: 1234, error: 5678 };
 const mock = {
   // @ts-ignore
-  executeSubscription: jest.fn(() => merge([fromValue(data), never])),
+  executeSubscription: vi.fn(() => merge([fromValue(data), never])),
 };
 
-const client = mock as { executeSubscription: jest.Mock };
+const client = mock as { executeSubscription: Mock };
 const query = 'subscription Example { example }';
 
 let state: UseSubscriptionState<any> | undefined;
-let execute: ((opts?: Partial<OperationContext>) => void) | undefined;
+let execute: ((_opts?: Partial<OperationContext>) => void) | undefined;
 
 const SubscriptionUser: FC<{
   q: string;
-  handler?: (prev: any, data: any) => any;
+  handler?: (_prev: any, _data: any) => any;
   context?: Partial<OperationContext>;
   pause?: boolean;
 }> = ({ q, handler, context, pause = false }) => {
@@ -28,7 +41,9 @@ const SubscriptionUser: FC<{
 };
 
 beforeAll(() => {
-  jest.spyOn(global.console, 'error').mockImplementation();
+  vi.spyOn(globalThis.console, 'error').mockImplementation(() => {
+    // do nothing
+  });
 });
 
 describe('useSubscription', () => {
@@ -91,6 +106,7 @@ describe('useSubscription', () => {
       );
       expect(state).toEqual({
         ...data,
+        hasNext: false,
         extensions: undefined,
         fetching: true,
         stale: false,
@@ -99,7 +115,7 @@ describe('useSubscription', () => {
   });
 
   it('calls handler', () => {
-    const handler = jest.fn();
+    const handler = vi.fn();
     const { rerender } = render(
       h(Provider, {
         value: client as any,

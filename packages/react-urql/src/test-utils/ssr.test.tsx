@@ -1,12 +1,12 @@
 import React from 'react';
 import prepass from 'react-ssr-prepass';
 import { never, publish, filter, delay, pipe, map } from 'wonka';
+import { describe, it, beforeEach, expect } from 'vitest';
 
 import {
   gql,
   Client,
   Exchange,
-  dedupExchange,
   cacheExchange,
   ssrExchange,
   OperationContext,
@@ -71,6 +71,8 @@ const queryResponse: OperationResult = {
       name: 'Clive',
     },
   },
+  stale: false,
+  hasNext: false,
 };
 
 const url = 'https://hostname.com';
@@ -93,7 +95,7 @@ describe('server-side rendering', () => {
     client = new Client({
       url,
       // We include the SSR exchange after the cache
-      exchanges: [dedupExchange, cacheExchange, ssr, fetchExchange],
+      exchanges: [cacheExchange, ssr, fetchExchange],
       suspense: true,
     });
   });
@@ -133,7 +135,7 @@ describe('client-side rehydration', () => {
     client = new Client({
       url,
       // We include the SSR exchange after the cache
-      exchanges: [dedupExchange, cacheExchange, ssr, fetchExchange],
+      exchanges: [cacheExchange, ssr, fetchExchange],
       suspense: false,
     });
   });

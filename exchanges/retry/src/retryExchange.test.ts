@@ -1,4 +1,15 @@
-import { pipe, map, makeSubject, publish, tap } from 'wonka';
+import {
+  Source,
+  pipe,
+  map,
+  makeSubject,
+  mergeMap,
+  fromValue,
+  fromArray,
+  publish,
+  tap,
+} from 'wonka';
+import { vi, expect, it, beforeEach, afterEach } from 'vitest';
 
 import {
   gql,
@@ -9,16 +20,16 @@ import {
   ExchangeIO,
 } from '@urql/core';
 
-import { retryExchange, RetryExchangeOptions } from './retryExchange';
+import { retryExchange } from './retryExchange';
 
-const dispatchDebug = jest.fn();
+const dispatchDebug = vi.fn();
 
 beforeEach(() => {
-  jest.useFakeTimers();
+  vi.useFakeTimers();
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  vi.useRealTimers();
 });
 
 const mockOptions = {
@@ -54,7 +65,10 @@ const queryOneError = {
 
 let client, op, ops$, next;
 beforeEach(() => {
-  client = createClient({ url: 'http://0.0.0.0' });
+  client = createClient({
+    url: 'http://0.0.0.0',
+    exchanges: [],
+  });
   op = client.createRequestOperation('query', {
     key: 1,
     query: queryOne,
@@ -63,7 +77,7 @@ beforeEach(() => {
   ({ source: ops$, next } = makeSubject<Operation>());
 });
 
-it(`retries if it hits an error and works for multiple concurrent operations`, () => {
+it('retries if it hits an error and works for multiple concurrent operations', () => {
   const queryTwo = gql`
     {
       films {
@@ -81,26 +95,24 @@ it(`retries if it hits an error and works for multiple concurrent operations`, (
     query: queryTwo,
   });
 
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      expect(
-        forwardOp.key === op.key || forwardOp.key === opTwo.key
-      ).toBeTruthy();
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    expect(
+      forwardOp.key === op.key || forwardOp.key === opTwo.key
+    ).toBeTruthy();
 
-      return {
-        operation: forwardOp,
-        // @ts-ignore
-        error: forwardOp.key === 2 ? queryTwoError : queryOneError,
-      };
-    }
-  );
+    return {
+      operation: forwardOp,
+      // @ts-ignore
+      error: forwardOp.key === 2 ? queryTwoError : queryOneError,
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
 
-  const mockRetryIf = jest.fn((() => true) as RetryExchangeOptions['retryIf']);
+  const mockRetryIf = vi.fn(() => true);
 
   pipe(
     retryExchange({
@@ -120,7 +132,7 @@ it(`retries if it hits an error and works for multiple concurrent operations`, (
   expect(mockRetryIf).toHaveBeenCalledTimes(1);
   expect(mockRetryIf).toHaveBeenCalledWith(queryOneError as any, op);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 
   expect(mockRetryIf).toHaveBeenCalledTimes(mockOptions.maxNumberAttempts);
 
@@ -131,7 +143,7 @@ it(`retries if it hits an error and works for multiple concurrent operations`, (
 
   next(opTwo);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 
   expect(mockRetryIf).toHaveBeenCalledWith(queryTwoError as any, opTwo);
 
@@ -142,25 +154,23 @@ it(`retries if it hits an error and works for multiple concurrent operations`, (
 
 it('should retry x number of times and then return the successful result', () => {
   const numberRetriesBeforeSuccess = 3;
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      expect(forwardOp.key).toBe(op.key);
-      // @ts-ignore
-      return {
-        operation: forwardOp,
-        ...(forwardOp.context.retryCount! >= numberRetriesBeforeSuccess
-          ? { data: queryOneData }
-          : { error: queryOneError }),
-      };
-    }
-  );
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    expect(forwardOp.key).toBe(op.key);
+    // @ts-ignore
+    return {
+      operation: forwardOp,
+      ...(forwardOp.context.retry?.count >= numberRetriesBeforeSuccess
+        ? { data: queryOneData }
+        : { error: queryOneError }),
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
 
-  const mockRetryIf = jest.fn((() => true) as RetryExchangeOptions['retryIf']);
+  const mockRetryIf = vi.fn(() => true);
 
   pipe(
     retryExchange({
@@ -176,7 +186,7 @@ it('should retry x number of times and then return the successful result', () =>
   );
 
   next(op);
-  jest.runAllTimers();
+  vi.runAllTimers();
 
   expect(mockRetryIf).toHaveBeenCalledTimes(numberRetriesBeforeSuccess);
   expect(mockRetryIf).toHaveBeenCalledWith(queryOneError as any, op);
@@ -186,23 +196,83 @@ it('should retry x number of times and then return the successful result', () =>
   expect(result).toHaveBeenCalledTimes(1);
 });
 
+it('should reset the retry counter if an operation succeeded first', () => {
+  let call = 0;
+  const response = vi.fn((forwardOp: Operation): Source<any> => {
+    expect(forwardOp.key).toBe(op.key);
+    if (call === 0) {
+      call++;
+      return fromValue({
+        operation: forwardOp,
+        error: queryOneError,
+      } as any);
+    } else if (call === 1) {
+      call++;
+      return fromArray([
+        {
+          operation: forwardOp,
+          error: queryOneError,
+        } as any,
+        {
+          operation: forwardOp,
+          data: queryOneData,
+        } as any,
+      ]);
+    } else {
+      expect(forwardOp.context.retry).toEqual({ count: 0, delay: null });
+
+      return fromValue({
+        operation: forwardOp,
+        data: queryOneData,
+      } as any);
+    }
+  });
+
+  const result = vi.fn();
+  const forward: ExchangeIO = ops$ => {
+    return pipe(ops$, mergeMap(response));
+  };
+
+  const mockRetryIf = vi.fn(() => true);
+
+  pipe(
+    retryExchange({
+      ...mockOptions,
+      retryIf: mockRetryIf,
+    })({
+      forward,
+      client,
+      dispatchDebug,
+    })(ops$),
+    tap(result),
+    publish
+  );
+
+  next(op);
+  vi.runAllTimers();
+
+  expect(mockRetryIf).toHaveBeenCalledTimes(2);
+  expect(mockRetryIf).toHaveBeenCalledWith(queryOneError as any, op);
+
+  expect(response).toHaveBeenCalledTimes(3);
+  expect(result).toHaveBeenCalledTimes(2);
+});
+
 it(`should still retry if retryIf undefined but there is a networkError`, () => {
   const errorWithNetworkError = {
     ...queryOneError,
     networkError: 'scary network error',
   };
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      expect(forwardOp.key).toBe(op.key);
-      return {
-        operation: forwardOp,
-        // @ts-ignore
-        error: errorWithNetworkError,
-      };
-    }
-  );
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    expect(forwardOp.key).toBe(op.key);
+    return {
+      operation: forwardOp,
+      // @ts-ignore
+      error: errorWithNetworkError,
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
@@ -222,7 +292,7 @@ it(`should still retry if retryIf undefined but there is a networkError`, () => 
 
   next(op);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 
   // max number of retries, plus original call
   expect(response).toHaveBeenCalledTimes(mockOptions.maxNumberAttempts);
@@ -234,23 +304,21 @@ it('should allow retryWhen to return falsy value and act as replacement of retry
     ...queryOneError,
     networkError: 'scary network error',
   };
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      expect(forwardOp.key).toBe(op.key);
-      return {
-        operation: forwardOp,
-        // @ts-ignore
-        error: errorWithNetworkError,
-      };
-    }
-  );
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    expect(forwardOp.key).toBe(op.key);
+    return {
+      operation: forwardOp,
+      // @ts-ignore
+      error: errorWithNetworkError,
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
 
-  const retryWith = jest.fn(() => null);
+  const retryWith = vi.fn(() => null);
 
   pipe(
     retryExchange({
@@ -268,7 +336,7 @@ it('should allow retryWhen to return falsy value and act as replacement of retry
 
   next(op);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 
   // max number of retries, plus original call
   expect(retryWith).toHaveBeenCalledTimes(1);
@@ -281,23 +349,21 @@ it('should allow retryWhen to return new operations when retrying', () => {
     ...queryOneError,
     networkError: 'scary network error',
   };
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      expect(forwardOp.key).toBe(op.key);
-      return {
-        operation: forwardOp,
-        // @ts-ignore
-        error: errorWithNetworkError,
-      };
-    }
-  );
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    expect(forwardOp.key).toBe(op.key);
+    return {
+      operation: forwardOp,
+      // @ts-ignore
+      error: errorWithNetworkError,
+    };
+  });
 
-  const result = jest.fn();
+  const result = vi.fn();
   const forward: ExchangeIO = ops$ => {
     return pipe(ops$, map(response));
   };
 
-  const retryWith = jest.fn((_error, operation) => {
+  const retryWith = vi.fn((_error, operation) => {
     return makeOperation(operation.kind, operation, {
       ...operation.context,
       counter: (operation.context?.counter || 0) + 1,
@@ -320,7 +386,7 @@ it('should allow retryWhen to return new operations when retrying', () => {
 
   next(op);
 
-  jest.runAllTimers();
+  vi.runAllTimers();
 
   // max number of retries, plus original call
   expect(retryWith).toHaveBeenCalledTimes(mockOptions.maxNumberAttempts - 1);
@@ -329,4 +395,62 @@ it('should allow retryWhen to return new operations when retrying', () => {
 
   expect(response.mock.calls[1][0]).toHaveProperty('context.counter', 1);
   expect(response.mock.calls[2][0]).toHaveProperty('context.counter', 2);
+});
+
+it('should increase retries by initialDelayMs for each subsequent failure', () => {
+  const errorWithNetworkError = {
+    ...queryOneError,
+    networkError: 'scary network error',
+  };
+  const response = vi.fn((forwardOp: Operation): OperationResult => {
+    expect(forwardOp.key).toBe(op.key);
+    return {
+      operation: forwardOp,
+      // @ts-ignore
+      error: errorWithNetworkError,
+    };
+  });
+
+  const result = vi.fn();
+  const forward: ExchangeIO = ops$ => {
+    return pipe(ops$, map(response));
+  };
+
+  const retryWith = vi.fn((_error, operation) => {
+    return makeOperation(operation.kind, operation, {
+      ...operation.context,
+      counter: (operation.context?.counter || 0) + 1,
+    });
+  });
+
+  const fixedDelayMs = 50;
+
+  const fixedDelayOptions = {
+    ...mockOptions,
+    randomDelay: false,
+    initialDelayMs: fixedDelayMs,
+  };
+
+  pipe(
+    retryExchange({
+      ...fixedDelayOptions,
+      retryIf: undefined,
+      retryWith,
+    })({
+      forward,
+      client,
+      dispatchDebug,
+    })(ops$),
+    tap(result),
+    publish
+  );
+
+  next(op);
+
+  // delay between each call should be increased by initialDelayMs
+  // (e.g. if initialDelayMs is 5s, first retry is waits 5 seconds, second retry waits 10 seconds)
+  for (let i = 1; i <= fixedDelayOptions.maxNumberAttempts; i++) {
+    expect(response).toHaveBeenCalledTimes(i);
+    vi.advanceTimersByTime(i * fixedDelayOptions.initialDelayMs);
+  }
 });

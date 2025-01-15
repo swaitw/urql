@@ -1,4 +1,5 @@
-import { print } from 'graphql';
+import { vi, expect, it } from 'vitest';
+
 import {
   empty,
   publish,
@@ -8,23 +9,26 @@ import {
   take,
   toPromise,
 } from 'wonka';
+
 import { Client } from '../client';
 import { subscriptionOperation, subscriptionResult } from '../test-utils';
+import { stringifyDocument } from '../utils';
 import { OperationResult } from '../types';
 import { subscriptionExchange, SubscriptionForwarder } from './subscription';
 
 it('should return response data from forwardSubscription observable', async () => {
   const exchangeArgs = {
-    dispatchDebug: jest.fn(),
+    dispatchDebug: vi.fn(),
     forward: () => empty as Source<OperationResult>,
     client: {} as Client,
   };
 
-  const unsubscribe = jest.fn();
+  const unsubscribe = vi.fn();
   const forwardSubscription: SubscriptionForwarder = operation => {
-    expect(operation.query).toBe(print(subscriptionOperation.query));
+    expect(operation.query).toBe(
+      stringifyDocument(subscriptionOperation.query)
+    );
     expect(operation.variables).toBe(subscriptionOperation.variables);
-    expect(operation.context).toEqual(subscriptionOperation.context);
 
     return {
       subscribe(observer) {
@@ -49,11 +53,11 @@ it('should return response data from forwardSubscription observable', async () =
 });
 
 it('should tear down the operation if the source subscription ends', async () => {
-  const reexecuteOperation = jest.fn();
-  const unsubscribe = jest.fn();
+  const reexecuteOperation = vi.fn();
+  const unsubscribe = vi.fn();
 
   const exchangeArgs = {
-    dispatchDebug: jest.fn(),
+    dispatchDebug: vi.fn(),
     forward: () => empty as Source<OperationResult>,
     client: { reexecuteOperation: reexecuteOperation as any } as Client,
   };
@@ -75,4 +79,32 @@ it('should tear down the operation if the source subscription ends', async () =>
 
   expect(unsubscribe).not.toHaveBeenCalled();
   expect(reexecuteOperation).toHaveBeenCalled();
+});
+
+it('should allow providing a custom isSubscriptionOperation implementation', async () => {
+  const exchangeArgs = {
+    dispatchDebug: vi.fn(),
+    forward: () => empty as Source<OperationResult>,
+    client: {} as Client,
+  };
+
+  const isSubscriptionOperation = vi.fn(() => true);
+
+  const forwardSubscription: SubscriptionForwarder = () => ({
+    subscribe(observer) {
+      observer.next(subscriptionResult);
+      return { unsubscribe: vi.fn() };
+    },
+  });
+
+  await pipe(
+    fromValue(subscriptionOperation),
+    subscriptionExchange({ forwardSubscription, isSubscriptionOperation })(
+      exchangeArgs
+    ),
+    take(1),
+    toPromise
+  );
+
+  expect(isSubscriptionOperation).toHaveBeenCalled();
 });

@@ -1,54 +1,68 @@
 /* eslint-disable @typescript-eslint/no-use-before-define */
-import { filter, map, merge, pipe, share, tap } from 'wonka';
+import { filter, map, merge, pipe, tap } from 'wonka';
 
-import { Client } from '../client';
-import { Exchange, Operation, OperationResult } from '../types';
+import type { Client } from '../client';
+import type { Exchange, Operation, OperationResult } from '../types';
 
 import {
   makeOperation,
   addMetadata,
-  collectTypesFromResponse,
+  collectTypenames,
   formatDocument,
+  makeResult,
 } from '../utils';
 
 type ResultCache = Map<number, OperationResult>;
-
-interface OperationCache {
-  [key: string]: Set<number>;
-}
+type OperationCache = Map<string, Set<number>>;
 
 const shouldSkip = ({ kind }: Operation) =>
   kind !== 'mutation' && kind !== 'query';
 
-export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
-  const resultCache = new Map() as ResultCache;
-  const operationCache = Object.create(null) as OperationCache;
-
-  // Adds unique typenames to query (for invalidating cache entries)
-  const mapTypeNames = (operation: Operation): Operation => {
+/** Adds unique typenames to query (for invalidating cache entries) */
+export const mapTypeNames = (operation: Operation): Operation => {
+  const query = formatDocument(operation.query);
+  if (query !== operation.query) {
     const formattedOperation = makeOperation(operation.kind, operation);
-    formattedOperation.query = formatDocument(operation.query);
+    formattedOperation.query = query;
     return formattedOperation;
-  };
+  } else {
+    return operation;
+  }
+};
 
-  const isOperationCached = (operation: Operation) => {
-    const {
-      key,
-      kind,
-      context: { requestPolicy },
-    } = operation;
-    return (
-      kind === 'query' &&
-      requestPolicy !== 'network-only' &&
-      (requestPolicy === 'cache-only' || resultCache.has(key))
-    );
-  };
+/** Default document cache exchange.
+ *
+ * @remarks
+ * The default document cache in `urql` avoids sending the same GraphQL request
+ * multiple times by caching it using the {@link Operation.key}. It will invalidate
+ * query results automatically whenever it sees a mutation responses with matching
+ * `__typename`s in their responses.
+ *
+ * The document cache will get the introspected `__typename` fields by modifying
+ * your GraphQL operation documents using the {@link formatDocument} utility.
+ *
+ * This automatic invalidation strategy can fail if your query or mutation don’t
+ * contain matching typenames, for instance, because the query contained an
+ * empty list.
+ * You can manually add hints for this exchange by specifying a list of
+ * {@link OperationContext.additionalTypenames} for queries and mutations that
+ * should invalidate one another.
+ *
+ * @see {@link https://urql.dev/goto/docs/basics/document-caching} for more information on this cache.
+ */
+export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
+  const resultCache: ResultCache = new Map();
+  const operationCache: OperationCache = new Map();
+
+  const isOperationCached = (operation: Operation) =>
+    operation.kind === 'query' &&
+    operation.context.requestPolicy !== 'network-only' &&
+    (operation.context.requestPolicy === 'cache-only' ||
+      resultCache.has(operation.key));
 
   return ops$ => {
-    const sharedOps$ = share(ops$);
-
     const cachedOps$ = pipe(
-      sharedOps$,
+      ops$,
       filter(op => !shouldSkip(op) && isOperationCached(op)),
       map(operation => {
         const cachedResult = resultCache.get(operation.key);
@@ -66,8 +80,14 @@ export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
               }),
         });
 
-        const result: OperationResult = {
-          ...cachedResult,
+        let result: OperationResult =
+          cachedResult ||
+          makeResult(operation, {
+            data: null,
+          });
+
+        result = {
+          ...result,
           operation: addMetadata(operation, {
             cacheOutcome: cachedResult ? 'hit' : 'miss',
           }),
@@ -85,12 +105,12 @@ export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
     const forwardedOps$ = pipe(
       merge([
         pipe(
-          sharedOps$,
+          ops$,
           filter(op => !shouldSkip(op) && !isOperationCached(op)),
           map(mapTypeNames)
         ),
         pipe(
-          sharedOps$,
+          ops$,
           filter(op => shouldSkip(op))
         ),
       ]),
@@ -103,12 +123,21 @@ export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
         let { operation } = response;
         if (!operation) return;
 
-        const typenames = collectTypesFromResponse(response.data).concat(
-          operation.context.additionalTypenames || []
-        );
+        let typenames = operation.context.additionalTypenames || [];
+        // NOTE: For now, we only respect `additionalTypenames` from subscriptions to
+        // avoid unexpected breaking changes
+        // We'd expect live queries or other update mechanisms to be more suitable rather
+        // than using subscriptions as “signals” to reexecute queries. However, if they’re
+        // just used as signals, it’s intuitive to hook them up using `additionalTypenames`
+        if (response.operation.kind !== 'subscription') {
+          typenames = collectTypenames(response.data).concat(typenames);
+        }
 
         // Invalidates the cache given a mutation's response
-        if (response.operation.kind === 'mutation') {
+        if (
+          response.operation.kind === 'mutation' ||
+          response.operation.kind === 'subscription'
+        ) {
           const pendingOperations = new Set<number>();
 
           dispatchDebug({
@@ -120,30 +149,27 @@ export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
 
           for (let i = 0; i < typenames.length; i++) {
             const typeName = typenames[i];
-            const operations =
-              operationCache[typeName] ||
-              (operationCache[typeName] = new Set());
-            operations.forEach(key => {
-              pendingOperations.add(key);
-            });
+            let operations = operationCache.get(typeName);
+            if (!operations)
+              operationCache.set(typeName, (operations = new Set()));
+            for (const key of operations.values()) pendingOperations.add(key);
             operations.clear();
           }
 
-          pendingOperations.forEach(key => {
+          for (const key of pendingOperations.values()) {
             if (resultCache.has(key)) {
               operation = (resultCache.get(key) as OperationResult).operation;
               resultCache.delete(key);
               reexecuteOperation(client, operation);
             }
-          });
-          // Mark typenames on typenameInvalidate for early invalidation
+          }
         } else if (operation.kind === 'query' && response.data) {
           resultCache.set(operation.key, response);
           for (let i = 0; i < typenames.length; i++) {
             const typeName = typenames[i];
-            const operations =
-              operationCache[typeName] ||
-              (operationCache[typeName] = new Set());
+            let operations = operationCache.get(typeName);
+            if (!operations)
+              operationCache.set(typeName, (operations = new Set()));
             operations.add(operation.key);
           }
         }
@@ -154,11 +180,12 @@ export const cacheExchange: Exchange = ({ forward, client, dispatchDebug }) => {
   };
 };
 
-// Reexecutes a given operation with the default requestPolicy
+/** Reexecutes an `Operation` with the `network-only` request policy.
+ * @internal
+ */
 export const reexecuteOperation = (client: Client, operation: Operation) => {
   return client.reexecuteOperation(
     makeOperation(operation.kind, operation, {
-      ...operation.context,
       requestPolicy: 'network-only',
     })
   );

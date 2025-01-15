@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { CombinedError } from './error';
 
 describe('CombinedError', () => {
@@ -14,9 +15,8 @@ describe('CombinedError', () => {
       networkError: new Error('test'),
     });
 
-    expect(err instanceof CombinedError).toBe(true);
-    expect(err instanceof Error).toBe(true);
-    expect(Error.prototype.isPrototypeOf(err)).toBe(true);
+    expect(err).toBeInstanceOf(CombinedError);
+    expect(err).toBeInstanceOf(Error);
     expect('' + err).toMatchSnapshot();
   });
 
@@ -60,9 +60,12 @@ describe('CombinedError', () => {
     expect(err.graphQLErrors).toEqual(graphQLErrors);
   });
 
-  it('passes graphQLErrors through as a last resort', () => {
-    const graphQLErrors = [{ x: 'y' }] as any;
+  it('accepts empty string errors for graphQLError', () => {
+    const graphQLErrors = [new Error('')];
+
     const err = new CombinedError({ graphQLErrors });
+
+    expect(err.message).toBe('[GraphQL] ');
 
     expect(err.graphQLErrors).toEqual(graphQLErrors);
   });

@@ -1,11 +1,12 @@
-/* eslint-disable react-hooks/rules-of-hooks */
+// @vitest-environment jsdom
+import { vi, expect, it, beforeEach, describe, Mock } from 'vitest';
 
 // Note: Testing for hooks is not yet supported in Enzyme - https://github.com/airbnb/enzyme/issues/2011
-jest.mock('../context', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { map, interval, pipe } = require('wonka');
+vi.mock('../context', async () => {
+  const { map, interval, pipe } =
+    await vi.importActual<typeof import('wonka')>('wonka');
   const mock = {
-    executeQuery: jest.fn(() =>
+    executeQuery: vi.fn(() =>
       pipe(
         interval(400),
         map((i: number) => ({ data: i, error: i + 1, extensions: { i: 1 } }))
@@ -27,7 +28,7 @@ import { useQuery, UseQueryArgs, UseQueryState } from './useQuery';
 import { useClient } from '../context';
 
 // @ts-ignore
-const client = useClient() as { executeQuery: jest.Mock };
+const client = useClient() as { executeQuery: Mock };
 
 const props: UseQueryArgs<{ myVar: number }> = {
   query: '{ example }',
@@ -38,7 +39,7 @@ const props: UseQueryArgs<{ myVar: number }> = {
 };
 
 let state: UseQueryState<any> | undefined;
-let execute: ((opts?: Partial<OperationContext>) => void) | undefined;
+let execute: ((_opts?: Partial<OperationContext>) => void) | undefined;
 
 const QueryUser = ({
   query,
@@ -51,12 +52,13 @@ const QueryUser = ({
   return <p>{s.data}</p>;
 };
 
-beforeAll(() => {
-  // TODO: Fix use of act()
-  jest.spyOn(global.console, 'error').mockImplementation();
-});
-
 beforeEach(() => {
+  vi.useFakeTimers();
+  // TODO: Fix use of act()
+  vi.spyOn(globalThis.console, 'error').mockImplementation(() => {
+    // do nothings
+  });
+
   client.executeQuery.mockClear();
   state = undefined;
   execute = undefined;
@@ -98,7 +100,7 @@ describe('on subscription', () => {
 });
 
 describe('on subscription update', () => {
-  it('forwards data response', done => {
+  it('forwards data response', () => {
     const wrapper = renderer.create(<QueryUser {...props} />);
     /**
      * Have to call update (without changes) in order to see the
@@ -106,56 +108,48 @@ describe('on subscription update', () => {
      */
     wrapper.update(<QueryUser {...props} />);
 
-    setTimeout(() => {
+    act(() => {
+      vi.advanceTimersByTime(400);
       wrapper.update(<QueryUser {...props} />);
-      expect(state).toHaveProperty('data', 0);
-      done();
-    }, 400);
+    });
+
+    expect(state).toHaveProperty('data', 0);
   });
 
-  it('forwards error response', done => {
+  it('forwards error response', () => {
     const wrapper = renderer.create(<QueryUser {...props} />);
-    /**
-     * Have to call update (without changes) in order to see the
-     * result of the state change.
-     */
     wrapper.update(<QueryUser {...props} />);
 
-    setTimeout(() => {
+    act(() => {
+      vi.advanceTimersByTime(400);
       wrapper.update(<QueryUser {...props} />);
-      expect(state).toHaveProperty('error', 1);
-      done();
-    }, 400);
+    });
+
+    expect(state).toHaveProperty('error', 1);
   });
 
-  it('forwards extensions response', done => {
+  it('forwards extensions response', () => {
     const wrapper = renderer.create(<QueryUser {...props} />);
-    /**
-     * Have to call update (without changes) in order to see the
-     * result of the state change.
-     */
     wrapper.update(<QueryUser {...props} />);
 
-    setTimeout(() => {
+    act(() => {
+      vi.advanceTimersByTime(400);
       wrapper.update(<QueryUser {...props} />);
-      expect(state).toHaveProperty('extensions', { i: 1 });
-      done();
-    }, 400);
+    });
+
+    expect(state).toHaveProperty('extensions', { i: 1 });
   });
 
-  it('sets fetching to false', done => {
+  it('sets fetching to false', () => {
     const wrapper = renderer.create(<QueryUser {...props} />);
-    /**
-     * Have to call update (without changes) in order to see the
-     * result of the state change.
-     */
     wrapper.update(<QueryUser {...props} />);
 
-    setTimeout(() => {
+    act(() => {
+      vi.advanceTimersByTime(400);
       wrapper.update(<QueryUser {...props} />);
-      expect(state).toHaveProperty('fetching', false);
-      done();
-    }, 400);
+    });
+
+    expect(state).toHaveProperty('fetching', false);
   });
 });
 
@@ -164,22 +158,19 @@ describe('on change', () => {
 
   it('new query executes subscription', () => {
     const wrapper = renderer.create(<QueryUser {...props} />);
+    wrapper.update(<QueryUser {...props} query={q} />);
 
-    /**
-     * Have to call update twice for the change to be detected.
-     * Only a single change is detected (updating 5 times still only calls
-     * execute subscription twice).
-     */
-    wrapper.update(<QueryUser {...props} query={q} />);
-    wrapper.update(<QueryUser {...props} query={q} />);
+    act(() => {
+      wrapper.update(<QueryUser {...props} query={q} />);
+    });
 
     expect(client.executeQuery).toBeCalledTimes(2);
   });
 });
 
 describe('on unmount', () => {
-  const start = jest.fn();
-  const unsubscribe = jest.fn();
+  const start = vi.fn();
+  const unsubscribe = vi.fn();
 
   beforeEach(() => {
     client.executeQuery.mockReturnValue(
@@ -211,12 +202,12 @@ describe('pause', () => {
 
   it('skips executing queries if pause updates to true', () => {
     const wrapper = renderer.create(<QueryUser {...props} />);
+    wrapper.update(<QueryUser {...props} pause={true} />);
 
-    /**
-     * Call update twice for the change to be detected.
-     */
-    wrapper.update(<QueryUser {...props} pause={true} />);
-    wrapper.update(<QueryUser {...props} pause={true} />);
+    act(() => {
+      wrapper.update(<QueryUser {...props} pause={true} />);
+    });
+
     expect(client.executeQuery).toBeCalledTimes(1);
   });
 });

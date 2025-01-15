@@ -5,6 +5,11 @@ order: 0
 
 # @urql/core
 
+> **Note:** These API docs are deprecated as we now keep TSDocs in all published packages.
+> You can view TSDocs while using these packages in your editor, as long as it supports the
+> TypeScript Language Server.
+> We're planning to replace these API docs with a separate web app soon.
+
 The `@urql/core` package is the basis of all framework bindings. Each bindings-package,
 like [`urql` for React](./urql.md) or [`@urql/preact`](./preact.md), will reuse the core logic and
 reexport all exports from `@urql/core`.
@@ -20,16 +25,15 @@ It accepts several options on creation.
 
 `@urql/core` also exposes `createClient()` that is just a convenient alternative to calling `new Client()`.
 
-| Input             | Type                               | Description                                                                                                                                                                            |
-| ----------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exchanges`       | `Exchange[]`                       | An array of `Exchange`s that the client should use instead of the list of `defaultExchanges`                                                                                           |
-| `url`             | `string`                           | The GraphQL API URL as used by `fetchExchange`                                                                                                                                         |
-| `fetchOptions`    | `RequestInit \| () => RequestInit` | Additional `fetchOptions` that `fetch` in `fetchExchange` should use to make a request                                                                                                 |
-| `fetch`           | `typeof fetch`                     | An alternative implementation of `fetch` that will be used by the `fetchExchange` instead of `window.fetch`                                                                            |
-| `suspense`        | `?boolean`                         | Activates the experimental React suspense mode, which can be used during server-side rendering to prefetch data                                                                        |
-| `requestPolicy`   | `?RequestPolicy`                   | Changes the default request policy that will be used. By default, this will be `cache-first`.                                                                                          |
-| `preferGetMethod` | `?boolean`                         | This is picked up by the `fetchExchange` and will force all queries (not mutations) to be sent using the HTTP GET method instead of POST.                                              |
-| `maskTypename`    | `?boolean`                         | Enables the `Client` to automatically apply the `maskTypename` utility to all `data` on [`OperationResult`s](#operationresult). This makes the `__typename` properties non-enumerable. |
+| Input             | Type                                        | Description                                                                                                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exchanges`       | `Exchange[]`                                | An array of `Exchange`s that the client should use                                                                                                                                                                                                                                                             |
+| `url`             | `string`                                    | The GraphQL API URL as used by `fetchExchange`                                                                                                                                                                                                                                                                 |
+| `fetchOptions`    | `RequestInit \| () => RequestInit`          | Additional `fetchOptions` that `fetch` in `fetchExchange` should use to make a request                                                                                                                                                                                                                         |
+| `fetch`           | `typeof fetch`                              | An alternative implementation of `fetch` that will be used by the `fetchExchange` instead of `window.fetch`                                                                                                                                                                                                    |
+| `suspense`        | `?boolean`                                  | Activates the experimental React suspense mode, which can be used during server-side rendering to prefetch data                                                                                                                                                                                                |
+| `requestPolicy`   | `?RequestPolicy`                            | Changes the default request policy that will be used. By default, this will be `cache-first`.                                                                                                                                                                                                                  |
+| `preferGetMethod` | `?boolean \| 'force' \| 'within-url-limit'` | This is picked up by the `fetchExchange` and will force all queries (not mutations) to be sent using the HTTP GET method instead of POST if the length of the resulting URL doesn't exceed 2048 characters. When `'force'` is passed a GET request is always sent regardless of how long the resulting URL is. |
 
 ### client.executeQuery
 
@@ -199,16 +203,16 @@ data that can be passed from almost all API methods in `urql` that deal with
 Some of these options are set when the `Client` is initialised, so in the following list of
 properties you'll likely see some options that exist on the `Client` as well.
 
-| Prop                  | Type                                  | Description                                                                                                                     |
-| --------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `fetchOptions`        | `?RequestInit \| (() => RequestInit)` | Additional `fetchOptions` that `fetch` in `fetchExchange` should use to make a request.                                         |
-| `fetch`               | `typeof fetch`                        | An alternative implementation of `fetch` that will be used by the `fetchExchange` instead of `window.fetch`                     |
-| `requestPolicy`       | `RequestPolicy`                       | An optional [request policy](../basics/document-caching.md#request-policies) that should be used specifying the cache strategy. |
-| `url`                 | `string`                              | The GraphQL endpoint                                                                                                            |
-| `meta`                | `?OperationDebugMeta`                 | Metadata that is only available in development for devtools.                                                                    |
-| `suspense`            | `?boolean`                            | Whether suspense is enabled.                                                                                                    |
-| `preferGetMethod`     | `?boolean`                            | Instructs the `fetchExchange` to use HTTP GET for queries.                                                                      |
-| `additionalTypenames` | `?string[]`                           | Allows you to tell the operation that it depends on certain typenames (used in document-cache.)                                 |
+| Prop                  | Type                                        | Description                                                                                                                     |
+| --------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `fetchOptions`        | `?RequestInit \| (() => RequestInit)`       | Additional `fetchOptions` that `fetch` in `fetchExchange` should use to make a request.                                         |
+| `fetch`               | `typeof fetch`                              | An alternative implementation of `fetch` that will be used by the `fetchExchange` instead of `window.fetch`                     |
+| `requestPolicy`       | `RequestPolicy`                             | An optional [request policy](../basics/document-caching.md#request-policies) that should be used specifying the cache strategy. |
+| `url`                 | `string`                                    | The GraphQL endpoint, when using GET you should use absolute url's                                                              |
+| `meta`                | `?OperationDebugMeta`                       | Metadata that is only available in development for devtools.                                                                    |
+| `suspense`            | `?boolean`                                  | Whether suspense is enabled.                                                                                                    |
+| `preferGetMethod`     | `?boolean \| 'force' \| 'within-url-limit'` | Instructs the `fetchExchange` to use HTTP GET for queries.                                                                      |
+| `additionalTypenames` | `?string[]`                                 | Allows you to tell the operation that it depends on certain typenames (used in document-cache.)                                 |
 
 It also accepts additional, untyped parameters that can be used to send more
 information to custom exchanges.
@@ -246,7 +250,7 @@ They're small building blocks and similar to "middleware".
 An exchange is defined to be a function that receives [`ExchangeInput`](#exchangeinput) and returns
 an `ExchangeIO` function. The `ExchangeIO` function in turn will receive a stream of operations, and
 must return a stream of results. If the exchange is purely transforming data, like the
-`dedupExchange` for instance, it'll call `forward`, which is the next Exchange's `ExchangeIO`
+`mapExchange` for instance, it'll call `forward`, which is the next Exchange's `ExchangeIO`
 function to get a stream of results.
 
 ```js
@@ -322,30 +326,75 @@ the `fetchExchange`.
 An exchange that writes incoming `Operation`s to `console.log` and
 writes completed `OperationResult`s to `console.log`.
 
-### dedupExchange
-
-An exchange that keeps track of ongoing `Operation`s that haven't returned had
-a corresponding `OperationResult` yet. Any duplicate `Operation` that it
-receives is filtered out if the same `Operation` has already been received
-and is still waiting for a result.
+This exchange is disabled in production and is based on the `mapExchange`.
+If you'd like to customise it, you can replace it with a custom `mapExchange`.
 
 ### fetchExchange
 
 The `fetchExchange` of type `Exchange` is responsible for sending operations of type `'query'` and
 `'mutation'` to a GraphQL API using `fetch`.
 
-### errorExchange
+### mapExchange
+
+The `mapExchange` allows you to:
+
+- react to or replace operations with `onOperation`,
+- react to or replace results with `onResult`,
+- and; react to errors in results with `onError`.
+
+It can therefore be used to quickly react to the core events in the `Client` without writing a custom
+exchange, effectively allowing you to ship your own `debugExchange`.
+
+```ts
+mapExchange({
+  onOperation(operation) {
+    console.log('operation', operation);
+  },
+  onResult(result) {
+    console.log('result', result);
+  },
+});
+```
+
+It can also be used to react only to errors, which is the same as checking for `result.error`:
+
+```ts
+mapExchange({
+  onError(error, operation) {
+    console.log(`The operation ${operation.key} has errored with:`, error);
+  },
+});
+```
+
+Lastly, it can be used to map operations and results, which may be useful to update the
+`OperationContext` or perform other standard tasks that require you to wait for a result:
+
+```ts
+import { mapExchange, makeOperation } from '@urql/core';
+
+mapExchange({
+  async onOperation(operation) {
+    // NOTE: This is only for illustration purposes
+    return makeOperation(operation.kind, operation, {
+      ...operation.context,
+      test: true,
+    });
+  },
+  async onResult(result) {
+    // NOTE: This is only for illustration purposes
+    if (result.data === undefined) result.data = null;
+    return result;
+  },
+});
+```
+
+### errorExchange (deprecated)
 
 An exchange that lets you inspect errors. This can be useful for logging, or reacting to
 different types of errors (e.g. logging the user out in case of a permission error).
 
-```ts
-errorExchange({
-  onError: (error: CombinedError, operation: Operation) => {
-    console.log('An error!', error);
-  },
-});
-```
+In newer versions of `@urql/core`, it's identical to the `mapExchange` and its export has been
+replaced as the `mapExchange` also allows you to pass an `onError` function.
 
 ## Utilities
 
@@ -458,27 +507,6 @@ for debugging as arguments, in that order.
 
 This utility is used by the [`cacheExchange`](#cacheexchange) and by
 [Graphcache](../graphcache/README.md) to add `__typename` fields to GraphQL `DocumentNode`s.
-
-### maskTypename
-
-This utility accepts a GraphQL `data` object, like `data` on [`OperationResult`s](#operationresult)
-and marks every `__typename` property as non-enumerable.
-
-The [`formatDocument`](#formatdocument) is often used by `urql` automatically and adds `__typename`
-fields to all results. However, this means that data often cannot be passed back into variables or
-inputs on mutations, which is a common use-case. This utility hides these fields, which can solve
-this problem.
-
-It's used by the [`Client`](#client) when the `maskTypename` option is enabled.
-
-### defaultExchanges
-
-This is an array of the default `Exchange`s that the `Client` uses when the `exchanges` option isn't
-passed.
-
-```js
-const defaultExchanges = [dedupExchange, cacheExchange, fetchExchange];
-```
 
 ### composeExchanges
 

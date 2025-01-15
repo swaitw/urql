@@ -1,12 +1,13 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { DocumentNode } from 'graphql';
-import { Source, pipe, subscribe, onEnd, onPush, takeWhile } from 'wonka';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { Source } from 'wonka';
+import { pipe, subscribe, onEnd, onPush, takeWhile } from 'wonka';
+import * as React from 'react';
 
-import {
+import type {
+  GraphQLRequestParams,
+  AnyVariables,
   Client,
-  TypedDocumentNode,
   CombinedError,
   OperationContext,
   RequestPolicy,
@@ -17,44 +18,215 @@ import {
 import { useClient } from '../context';
 import { useRequest } from './useRequest';
 import { getCacheForClient } from './cache';
-import { initialState, computeNextState, hasDepsChanged } from './state';
 
-export interface UseQueryArgs<Variables = object, Data = any> {
-  query: string | DocumentNode | TypedDocumentNode<Data, Variables>;
-  variables?: Variables;
+import {
+  deferDispatch,
+  initialState,
+  computeNextState,
+  hasDepsChanged,
+} from './state';
+
+/** Input arguments for the {@link useQuery} hook.
+ *
+ * @param query - The GraphQL query that `useQuery` executes.
+ * @param variables - The variables for the GraphQL query that `useQuery` executes.
+ */
+export type UseQueryArgs<
+  Variables extends AnyVariables = AnyVariables,
+  Data = any,
+> = {
+  /** Updates the {@link RequestPolicy} for the executed GraphQL query operation.
+   *
+   * @remarks
+   * `requestPolicy` modifies the {@link RequestPolicy} of the GraphQL query operation
+   * that `useQuery` executes, and indicates a caching strategy for cache exchanges.
+   *
+   * For example, when set to `'cache-and-network'`, {@link useQuery} will
+   * receive a cached result with `stale: true` and an API request will be
+   * sent in the background.
+   *
+   * @see {@link OperationContext.requestPolicy} for where this value is set.
+   */
   requestPolicy?: RequestPolicy;
+  /** Updates the {@link OperationContext} for the executed GraphQL query operation.
+   *
+   * @remarks
+   * `context` may be passed to {@link useQuery}, to update the {@link OperationContext}
+   * of a query operation. This may be used to update the `context` that exchanges
+   * will receive for a single hook.
+   *
+   * Hint: This should be wrapped in a `useMemo` hook, to make sure that your
+   * component doesn’t infinitely update.
+   *
+   * @example
+   * ```ts
+   * const [result, reexecute] = useQuery({
+   *   query,
+   *   context: useMemo(() => ({
+   *     additionalTypenames: ['Item'],
+   *   }), [])
+   * });
+   * ```
+   */
   context?: Partial<OperationContext>;
+  /** Prevents {@link useQuery} from automatically executing GraphQL query operations.
+   *
+   * @remarks
+   * `pause` may be set to `true` to stop {@link useQuery} from executing
+   * automatically. The hook will stop receiving updates from the {@link Client}
+   * and won’t execute the query operation, until either it’s set to `false`
+   * or the {@link UseQueryExecute} function is called.
+   *
+   * @see {@link https://urql.dev/goto/docs/basics/react-preact/#pausing-usequery} for
+   * documentation on the `pause` option.
+   */
   pause?: boolean;
-}
+} & GraphQLRequestParams<Data, Variables>;
 
-export interface UseQueryState<Data = any, Variables = object> {
+/** State of the current query, your {@link useQuery} hook is executing.
+ *
+ * @remarks
+ * `UseQueryState` is returned (in a tuple) by {@link useQuery} and
+ * gives you the updating {@link OperationResult} of GraphQL queries.
+ *
+ * Even when the query and variables passed to {@link useQuery} change,
+ * this state preserves the prior state and sets the `fetching` flag to
+ * `true`.
+ * This allows you to display the previous state, while implementing
+ * a separate loading indicator separately.
+ */
+export interface UseQueryState<
+  Data = any,
+  Variables extends AnyVariables = AnyVariables,
+> {
+  /** Indicates whether `useQuery` is waiting for a new result.
+   *
+   * @remarks
+   * When `useQuery` is passed a new query and/or variables, it will
+   * start executing the new query operation and `fetching` is set to
+   * `true` until a result arrives.
+   *
+   * Hint: This is subtly different than whether the query is actually
+   * fetching, and doesn’t indicate whether a query is being re-executed
+   * in the background. For this, see {@link UseQueryState.stale}.
+   */
   fetching: boolean;
+  /** Indicates that the state is not fresh and a new result will follow.
+   *
+   * @remarks
+   * The `stale` flag is set to `true` when a new result for the query
+   * is expected and `useQuery` is waiting for it. This may indicate that
+   * a new request is being requested in the background.
+   *
+   * @see {@link OperationResult.stale} for the source of this value.
+   */
   stale: boolean;
+  /** The {@link OperationResult.data} for the executed query. */
   data?: Data;
+  /** The {@link OperationResult.error} for the executed query. */
   error?: CombinedError;
+  /** The {@link OperationResult.hasNext} for the executed query. */
+  hasNext: boolean;
+  /** The {@link OperationResult.extensions} for the executed query. */
   extensions?: Record<string, any>;
+  /** The {@link Operation} that the current state is for.
+   *
+   * @remarks
+   * This is the {@link Operation} that is currently being executed.
+   * When {@link UseQueryState.fetching} is `true`, this is the
+   * last `Operation` that the current state was for.
+   */
   operation?: Operation<Data, Variables>;
 }
 
-export type UseQueryResponse<Data = any, Variables = object> = [
-  UseQueryState<Data, Variables>,
-  (opts?: Partial<OperationContext>) => void
-];
+/** Triggers {@link useQuery} to execute a new GraphQL query operation.
+ *
+ * @param opts - optionally, context options that will be merged with the hook's
+ * {@link UseQueryArgs.context} options and the `Client`’s options.
+ *
+ * @remarks
+ * When called, {@link useQuery} will re-execute the GraphQL query operation
+ * it currently holds, even if {@link UseQueryArgs.pause} is set to `true`.
+ *
+ * This is useful for executing a paused query or re-executing a query
+ * and get a new network result, by passing a new request policy.
+ *
+ * ```ts
+ * const [result, reexecuteQuery] = useQuery({ query });
+ *
+ * const refresh = () => {
+ *   // Re-execute the query with a network-only policy, skipping the cache
+ *   reexecuteQuery({ requestPolicy: 'network-only' });
+ * };
+ * ```
+ */
+export type UseQueryExecute = (opts?: Partial<OperationContext>) => void;
+
+/** Result tuple returned by the {@link useQuery} hook.
+ *
+ * @remarks
+ * Similarly to a `useState` hook’s return value,
+ * the first element is the {@link useQuery}’s result and state,
+ * a {@link UseQueryState} object,
+ * and the second is used to imperatively re-execute the query
+ * via a {@link UseQueryExecute} function.
+ */
+export type UseQueryResponse<
+  Data = any,
+  Variables extends AnyVariables = AnyVariables,
+> = [UseQueryState<Data, Variables>, UseQueryExecute];
 
 const isSuspense = (client: Client, context?: Partial<OperationContext>) =>
-  client.suspense && (!context || context.suspense !== false);
+  context && context.suspense !== undefined
+    ? !!context.suspense
+    : client.suspense;
 
-let currentInit = false;
-
-export function useQuery<Data = any, Variables = object>(
-  args: UseQueryArgs<Variables, Data>
-): UseQueryResponse<Data, Variables> {
+/** Hook to run a GraphQL query and get updated GraphQL results.
+ *
+ * @param args - a {@link UseQueryArgs} object, to pass a `query`, `variables`, and options.
+ * @returns a {@link UseQueryResponse} tuple of a {@link UseQueryState} result, and re-execute function.
+ *
+ * @remarks
+ * `useQuery` allows GraphQL queries to be defined and executed.
+ * Given {@link UseQueryArgs.query}, it executes the GraphQL query with the
+ * context’s {@link Client}.
+ *
+ * The returned result updates when the `Client` has new results
+ * for the query, and changes when your input `args` change.
+ *
+ * Additionally, if the `suspense` option is enabled on the `Client`,
+ * the `useQuery` hook will suspend instead of indicating that it’s
+ * waiting for a result via {@link UseQueryState.fetching}.
+ *
+ * @see {@link https://urql.dev/goto/urql/docs/basics/react-preact/#queries} for `useQuery` docs.
+ *
+ * @example
+ * ```ts
+ * import { gql, useQuery } from 'urql';
+ *
+ * const TodosQuery = gql`
+ *   query { todos { id, title } }
+ * `;
+ *
+ * const Todos = () => {
+ *   const [result, reexecuteQuery] = useQuery({
+ *     query: TodosQuery,
+ *     variables: {},
+ *   });
+ *   // ...
+ * };
+ * ```
+ */
+export function useQuery<
+  Data = any,
+  Variables extends AnyVariables = AnyVariables,
+>(args: UseQueryArgs<Variables, Data>): UseQueryResponse<Data, Variables> {
   const client = useClient();
   const cache = getCacheForClient(client);
   const suspense = isSuspense(client, args.context);
-  const request = useRequest<Data, Variables>(args.query, args.variables);
+  const request = useRequest(args.query, args.variables as Variables);
 
-  const source = useMemo(() => {
+  const source = React.useMemo(() => {
     if (args.pause) return null;
 
     const source = client.executeQuery(request, {
@@ -80,7 +252,7 @@ export function useQuery<Data = any, Variables = object>(
     args.context,
   ]);
 
-  const getSnapshot = useCallback(
+  const getSnapshot = React.useCallback(
     (
       source: Source<OperationResult<Data, Variables>> | null,
       suspense: boolean
@@ -93,7 +265,12 @@ export function useQuery<Data = any, Variables = object>(
 
         const subscription = pipe(
           source,
-          takeWhile(() => (suspense && !resolve) || !result),
+          takeWhile(
+            () =>
+              (suspense && !resolve) ||
+              !result ||
+              ('hasNext' in result && result.hasNext)
+          ),
           subscribe(_result => {
             result = _result;
             if (resolve) resolve(result);
@@ -127,18 +304,14 @@ export function useQuery<Data = any, Variables = object>(
     args.pause,
   ] as const;
 
-  const [state, setState] = useState(() => {
-    currentInit = true;
-    try {
-      return [
+  const [state, setState] = React.useState(
+    () =>
+      [
         source,
         computeNextState(initialState, getSnapshot(source, suspense)),
         deps,
-      ] as const;
-    } finally {
-      currentInit = false;
-    }
-  });
+      ] as const
+  );
 
   let currentResult = state[1];
   if (source !== state[0] && hasDepsChanged(state[2], deps)) {
@@ -152,7 +325,7 @@ export function useQuery<Data = any, Variables = object>(
     ]);
   }
 
-  useEffect(() => {
+  React.useEffect(() => {
     const source = state[0];
     const request = state[2][1];
 
@@ -160,14 +333,12 @@ export function useQuery<Data = any, Variables = object>(
 
     const updateResult = (result: Partial<UseQueryState<Data, Variables>>) => {
       hasResult = true;
-      if (!currentInit) {
-        setState(state => {
-          const nextResult = computeNextState(state[1], result);
-          return state[1] !== nextResult
-            ? [state[0], nextResult, state[2]]
-            : state;
-        });
-      }
+      deferDispatch(setState, state => {
+        const nextResult = computeNextState(state[1], result);
+        return state[1] !== nextResult
+          ? [state[0], nextResult, state[2]]
+          : state;
+      });
     };
 
     if (source) {
@@ -190,7 +361,7 @@ export function useQuery<Data = any, Variables = object>(
     }
   }, [cache, state[0], state[2][1]]);
 
-  const executeQuery = useCallback(
+  const executeQuery = React.useCallback(
     (opts?: Partial<OperationContext>) => {
       const context = {
         requestPolicy: args.requestPolicy,
@@ -198,7 +369,7 @@ export function useQuery<Data = any, Variables = object>(
         ...opts,
       };
 
-      setState(state => {
+      deferDispatch(setState, state => {
         const source = suspense
           ? pipe(
               client.executeQuery(request, context),
@@ -215,9 +386,9 @@ export function useQuery<Data = any, Variables = object>(
       cache,
       request,
       suspense,
-      getSnapshot,
       args.requestPolicy,
       args.context,
+      args.pause,
     ]
   );
 

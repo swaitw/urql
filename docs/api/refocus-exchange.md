@@ -5,6 +5,11 @@ order: 11
 
 # Refocus Exchange
 
+> **Note:** These API docs are deprecated as we now keep TSDocs in all published packages.
+> You can view TSDocs while using these packages in your editor, as long as it supports the
+> TypeScript Language Server.
+> We're planning to replace these API docs with a separate web app soon.
+
 `@urql/exchange-refocus` is an exchange for the `urql` that tracks currently active operations and redispatches them when the
 window regains focus
 
@@ -18,15 +23,14 @@ yarn add @urql/exchange-refocus
 npm install --save @urql/exchange-refocus
 ```
 
-Then add it to your `Client`, preferably after the `dedupExchange` but in front of any asynchronous
-exchanges, like the `fetchExchange`:
+Then add it to your `Client`, preferably in front of your `cacheExchange`
 
 ```js
-import { createClient, dedupExchange, cacheExchange, fetchExchange } from 'urql';
+import { createClient, cacheExchange, fetchExchange } from 'urql';
 import { refocusExchange } from '@urql/exchange-refocus';
 
 const client = createClient({
-  url: '/graphql',
-  exchanges: [dedupExchange, refocusExchange(), cacheExchange, fetchExchange],
+  url: 'http://localhost:3000/graphql',
+  exchanges: [refocusExchange(), cacheExchange, fetchExchange],
 });
 ```

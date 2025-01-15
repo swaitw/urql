@@ -1,11 +1,14 @@
-/* eslint-disable react-hooks/rules-of-hooks */
+// @vitest-environment jsdom
+
+import { vi, expect, it, beforeEach, describe, Mock } from 'vitest';
 
 // Note: Testing for hooks is not yet supported in Enzyme - https://github.com/airbnb/enzyme/issues/2011
-jest.mock('../context', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { delay, fromValue, pipe } = require('wonka');
+vi.mock('../context', async () => {
+  const { delay, fromValue, pipe } =
+    await vi.importActual<typeof import('wonka')>('wonka');
+
   const mock = {
-    executeMutation: jest.fn(() =>
+    executeMutation: vi.fn(() =>
       pipe(fromValue({ data: 1, error: 2, extensions: { i: 1 } }), delay(200))
     ),
   };
@@ -24,7 +27,7 @@ import { useClient } from '../context';
 import { useMutation } from './useMutation';
 
 // @ts-ignore
-const client = useClient() as { executeMutation: jest.Mock };
+const client = useClient() as { executeMutation: Mock };
 
 const props = {
   query: 'mutation Example { example }',
@@ -40,12 +43,13 @@ const MutationUser = ({ query }: { query: any }) => {
   return <p>{s.data}</p>;
 };
 
-beforeAll(() => {
-  // TODO: Fix use of act()
-  jest.spyOn(global.console, 'error').mockImplementation();
-});
-
 beforeEach(() => {
+  vi.useFakeTimers();
+
+  vi.spyOn(globalThis.console, 'error').mockImplementation(() => {
+    // do nothing
+  });
+
   client.executeMutation.mockClear();
   state = undefined;
   execute = undefined;
@@ -113,36 +117,45 @@ describe('on execute', () => {
 });
 
 describe('on subscription update', () => {
-  it('forwards data response', async () => {
+  it('forwards data response', () => {
     const wrapper = renderer.create(<MutationUser {...props} />);
-    await execute();
-    wrapper.update(<MutationUser {...props} />);
-
+    execute();
+    act(() => {
+      vi.advanceTimersByTime(200);
+      wrapper.update(<MutationUser {...props} />);
+    });
     expect(state).toHaveProperty('data', 1);
   });
 
-  it('forwards error response', async () => {
+  it('forwards error response', () => {
     const wrapper = renderer.create(<MutationUser {...props} />);
-    await execute();
-    wrapper.update(<MutationUser {...props} />);
-
+    execute();
+    act(() => {
+      vi.advanceTimersByTime(200);
+      wrapper.update(<MutationUser {...props} />);
+    });
     expect(state).toHaveProperty('error', 2);
   });
 
-  it('forwards extensions response', async () => {
+  it('forwards extensions response', () => {
     const wrapper = renderer.create(<MutationUser {...props} />);
-    await execute();
-    wrapper.update(<MutationUser {...props} />);
-
+    execute();
+    act(() => {
+      vi.advanceTimersByTime(200);
+      wrapper.update(<MutationUser {...props} />);
+    });
     expect(state).toHaveProperty('extensions', { i: 1 });
   });
 
-  it('sets fetching to false', async () => {
+  it('sets fetching to false', () => {
     const wrapper = renderer.create(<MutationUser {...props} />);
     wrapper.update(<MutationUser {...props} />);
 
-    await execute();
-    wrapper.update(<MutationUser {...props} />);
+    execute();
+    act(() => {
+      vi.advanceTimersByTime(200);
+      wrapper.update(<MutationUser {...props} />);
+    });
     expect(state).toHaveProperty('fetching', false);
   });
 });

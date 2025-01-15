@@ -1,35 +1,81 @@
 import { createContext } from 'preact';
 import { useContext } from 'preact/hooks';
-import { Client, createClient } from '@urql/core';
+import type { Client } from '@urql/core';
 
-// We assume some default options here; mainly not to actually be used
-// but not to error catastrophically if someone is just playing around
-const defaultClient = createClient({ url: '/graphql' });
+const OBJ = {};
 
-export const Context = createContext<Client>(defaultClient);
-export const Provider = Context.Provider;
-export const Consumer = Context.Consumer;
+/** `@urql/preact`'s Preact Context.
+ *
+ * @remarks
+ * The Preact Context that `urql`’s {@link Client} will be provided with.
+ * You may use the reexported {@link Provider} to provide a `Client` as well.
+ */
+export const Context: import('preact').Context<Client | object> =
+  createContext(OBJ);
+
+/** Provider for `urql`’s {@link Client} to GraphQL hooks.
+ *
+ * @remarks
+ * `Provider` accepts a {@link Client} and provides it to all GraphQL hooks,
+ * and {@link useClient}.
+ *
+ * You should make sure to create a {@link Client} and provide it with the
+ * `Provider` to parts of your component tree that use GraphQL hooks.
+ *
+ * @example
+ * ```tsx
+ * import { Provider } from '@urql/preact';
+ * // All of `@urql/core` is also re-exported by `@urql/preact`:
+ * import { Client, cacheExchange, fetchExchange } from '@urql/core';
+ *
+ * const client = new Client({
+ *   url: 'https://API',
+ *   exchanges: [cacheExchange, fetchExchange],
+ * });
+ *
+ * const App = () => (
+ *   <Provider value={client}>
+ *     <Component />
+ *   </Provider>
+ * );
+ * ```
+ */
+
+export const Provider: import('preact').Provider<Client | object> =
+  Context.Provider;
+
+/** Preact Consumer component, providing the {@link Client} provided on a parent component.
+ * @remarks
+ * This is an alias for {@link Context.Consumer}.
+ */
+export const Consumer: import('preact').Consumer<Client | object> =
+  Context.Consumer;
+
 Context.displayName = 'UrqlContext';
 
-let hasWarnedAboutDefault = false;
-
+/** Hook returning a {@link Client} from {@link Context}.
+ *
+ * @remarks
+ * `useClient` is a convenience hook, which accesses `@urql/preact`'s {@link Context}
+ * and returns the {@link Client} defined on it.
+ *
+ * This will be the {@link Client} you passed to a {@link Provider}
+ * you wrapped your elements containing this hook with.
+ *
+ * @throws
+ * In development, if the component you call `useClient()` in is
+ * not wrapped in a {@link Provider}, an error is thrown.
+ */
 export const useClient = (): Client => {
   const client = useContext(Context);
 
-  if (
-    process.env.NODE_ENV !== 'production' &&
-    client === defaultClient &&
-    !hasWarnedAboutDefault
-  ) {
-    hasWarnedAboutDefault = true;
+  if (client === OBJ && process.env.NODE_ENV !== 'production') {
+    const error =
+      "No client has been specified using urql's Provider. please create a client and add a Provider.";
 
-    console.warn(
-      "Default Client: No client has been specified using urql's Provider." +
-        'This means that urql will be falling back to defaults including making ' +
-        'requests to `/graphql`.\n' +
-        "If that's not what you want, please create a client and add a Provider."
-    );
+    console.error(error);
+    throw new Error(error);
   }
 
-  return client;
+  return client as Client;
 };

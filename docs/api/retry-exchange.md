@@ -5,6 +5,11 @@ order: 5
 
 # Retry Exchange
 
+> **Note:** These API docs are deprecated as we now keep TSDocs in all published packages.
+> You can view TSDocs while using these packages in your editor, as long as it supports the
+> TypeScript Language Server.
+> We're planning to replace these API docs with a separate web app soon.
+
 The `@urql/exchange-retry` package contains an addon `retryExchange` for `urql` that may be used to
 let failed operations be retried, typically when a previous operation has failed with a network
 error.
@@ -21,3 +26,4 @@ page.](../advanced/retry-operations.md)
 | `randomDelay`       | Allows the randomized delay described above to be disabled. When this option is set to `false` there will be exactly a `initialDelayMs` wait between each retry.                                                                                                                                                                                                                                 |
 | `maxNumberAttempts` | Allows the max number of retries to be defined.                                                                                                                                                                                                                                                                                                                                                  |
 | `retryIf`           | Apply a custom test to the returned error to determine whether it should be retried.                                                                                                                                                                                                                                                                                                             |
+| `retryWith`         | Apply a transform function allowing you to selectively replace a retried `Operation` or return a nullish value. This will act like `retryIf` where a truthy value retries (`retryIf` takes precedence and overrides this function.)                                                                                                                                                              |

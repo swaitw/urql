@@ -35,28 +35,28 @@ All features are marked to indicate the following:
 
 ### Core Features
 
-|                                            | urql                                | Apollo                                        | Relay                          |
-| ------------------------------------------ | ----------------------------------- | --------------------------------------------- | ------------------------------ |
-| Extensible on a network level              | ✅ Exchanges                        | ✅ Links                                      | ✅ Network Layers              |
-| Extensible on a cache / control flow level | ✅ Exchanges                        | 🛑                                            | 🛑                             |
-| Base Bundle Size                           | **5.9kB** (7.1kB with bindings)     | 32.9kB                                        | 27.7kB (34.1kB with bindings)  |
-| Devtools                                   | ✅                                  | ✅                                            | ✅                             |
-| Subscriptions                              | ✅                                  | ✅                                            | ✅                             |
-| Client-side Rehydration                    | ✅                                  | ✅                                            | ✅                             |
-| Polled Queries                             | 🔶                                  | ✅                                            | ✅                             |
-| Lazy Queries                               | ✅                                  | ✅                                            | ✅                             |
-| Stale while Revalidate / Cache and Network | ✅                                  | ✅                                            | ✅                             |
-| Focus Refetching                           | ✅ `@urql/exchange-refocus`         | 🛑                                            | 🛑                             |
-| Stale Time Configuration                   | ✅ `@urql/exchange-request-policy`  | ✅                                            | 🛑                             |
-| Persisted Queries                          | ✅ `@urql/exchange-persisted-fetch` | ✅ `apollo-link-persisted-queries`            | ✅                             |
-| Batched Queries                            | 🛑                                  | ✅ `apollo-link-batch-http`                   | 🟡 `react-relay-network-layer` |
-| Live Queries                               | 🛑                                  | 🛑                                            | ✅                             |
-| Defer & Stream Directives                  | ✅                                  | 🛑                                            | 🟡 (unreleased)                |
-| Switching to `GET` method                  | ✅                                  | ✅                                            | 🟡 `react-relay-network-layer` |
-| File Uploads                               | ✅ `@urql/exchange-multipart-fetch` | 🟡 `apollo-upload-client`                     | 🛑                             |
-| Retrying Failed Queries                    | ✅ `@urql/exchange-retry`           | ✅ `apollo-link-retry`                        | ✅ `DefaultNetworkLayer`       |
-| Easy Authentication Flows                  | ✅ `@urql/exchange-auth`            | 🛑 (no docs for refresh-based authentication) | 🟡 `react-relay-network-layer` |
-| Automatic Refetch after Mutation           | ✅ (with document cache)            | 🛑                                            | ✅                             |
+|                                            | urql                                           | Apollo                                                                                           | Relay                                                                                                            |
+| ------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Extensible on a network level              | ✅ Exchanges                                   | ✅ Links                                                                                         | ✅ Network Layers                                                                                                |
+| Extensible on a cache / control flow level | ✅ Exchanges                                   | 🛑                                                                                               | 🛑                                                                                                               |
+| Base Bundle Size                           | **10kB** (11kB with bindings)                  | ~50kB (55kB with React hooks)                                                                    | 45kB (66kB with bindings)                                                                                        |
+| Devtools                                   | ✅                                             | ✅                                                                                               | ✅                                                                                                               |
+| Subscriptions                              | 🔶 [Docs](./advanced/subscriptions.md)         | 🔶 [Docs](https://www.apollographql.com/docs/react/data/subscriptions/#setting-up-the-transport) | 🔶 [Docs](https://relay.dev/docs/guided-tour/updating-data/graphql-subscriptions/#configuring-the-network-layer) |
+| Client-side Rehydration                    | ✅ [Docs](./advanced/server-side-rendering.md) | ✅ [Docs](https://www.apollographql.com/docs/react/performance/server-side-rendering)            | 🛑                                                                                                               |
+| Polled Queries                             | 🔶                                             | ✅                                                                                               | ✅                                                                                                               |
+| Lazy Queries                               | ✅                                             | ✅                                                                                               | ✅                                                                                                               |
+| Stale while Revalidate / Cache and Network | ✅                                             | ✅                                                                                               | ✅                                                                                                               |
+| Focus Refetching                           | ✅ `@urql/exchange-refocus`                    | 🛑                                                                                               | 🛑                                                                                                               |
+| Stale Time Configuration                   | ✅ `@urql/exchange-request-policy`             | ✅                                                                                               | 🛑                                                                                                               |
+| Persisted Queries                          | ✅ `@urql/exchange-persisted`                  | ✅ `apollo-link-persisted-queries`                                                               | 🔶                                                                                                               |
+| Batched Queries                            | 🛑                                             | ✅ `apollo-link-batch-http`                                                                      | 🟡 `react-relay-network-layer`                                                                                   |
+| Live Queries                               | ✅ (via Incremental Delivery)                  | 🛑                                                                                               | ✅                                                                                                               |
+| Defer & Stream Directives                  | ✅                                             | ✅ / 🛑 (`@defer` is supported in >=3.7.0, `@stream` is not yet supported)                       | 🟡 (unreleased)                                                                                                  |
+| Switching to `GET` method                  | ✅                                             | ✅                                                                                               | 🟡 `react-relay-network-layer`                                                                                   |
+| File Uploads                               | ✅                                             | 🟡 `apollo-upload-client`                                                                        | 🛑                                                                                                               |
+| Retrying Failed Queries                    | ✅ `@urql/exchange-retry`                      | ✅ `apollo-link-retry`                                                                           | ✅ `DefaultNetworkLayer`                                                                                         |
+| Easy Authentication Flows                  | ✅ `@urql/exchange-auth`                       | 🛑 (no docs for refresh-based authentication)                                                    | 🟡 `react-relay-network-layer`                                                                                   |
+| Automatic Refetch after Mutation           | ✅ (with document cache)                       | 🛑                                                                                               | ✅                                                                                                               |
 
 Typically these are all additional addon features that you may expect from a GraphQL client, no
 matter which framework you use it with. It's worth mentioning that all three clients support some
@@ -73,7 +73,7 @@ you'd have to lean on community libraries or maintaining/implementing them yours
 
 One thing of note is our lack of support for batched queries in `urql`. We explicitly decided not to
 support this in our [first-party
-packages](https://github.com/FormidableLabs/urql/issues/800#issuecomment-626342821) as the benefits
+packages](https://github.com/urql-graphql/urql/issues/800#issuecomment-626342821) as the benefits
 are not present anymore in most cases with HTTP/2 and established patterns by Relay that recommend
 hoisting all necessary data requirements to a page-wide query.
 
@@ -82,9 +82,8 @@ hoisting all necessary data requirements to a page-wide query.
 |                                | urql           | Apollo              | Relay              |
 | ------------------------------ | -------------- | ------------------- | ------------------ |
 | React Bindings                 | ✅             | ✅                  | ✅                 |
-| React Concurrent Hooks Support | ✅             | 🛑                  | ✅ (experimental)  |
-| React Legacy Hooks Support     | ✅             | ✅                  | 🟡 `relay-hooks`   |
-| React Suspense (Experimental)  | ✅             | 🛑                  | ✅                 |
+| React Concurrent Hooks Support | ✅             | ✅                  | ✅                 |
+| React Suspense                 | ✅             | 🛑                  | ✅                 |
 | Next.js Integration            | ✅ `next-urql` | 🟡                  | 🔶                 |
 | Preact Support                 | ✅             | 🔶                  | 🔶                 |
 | Svelte Bindings                | ✅             | 🟡 `svelte-apollo`  | 🟡 `svelte-relay`  |
@@ -92,36 +91,25 @@ hoisting all necessary data requirements to a page-wide query.
 | Angular Bindings               | 🛑             | 🟡 `apollo-angular` | 🟡 `relay-angular` |
 | Initial Data on mount          | ✅             | ✅                  | ✅                 |
 
-Interestingly all three libraries heavily support React as they were all started from the React
-community outwards, but Apollo and Vue benefit from community bindings for different frameworks a
-lot. `urql`'s community is still growing and while that means it won't see large projects as
-Apollo's `vue-apollo` in the short term, we're aiming for first-party support for these bindings.
-
-This is a common criticism that we hear about `urql`, and it's true that our community isn't as
-extensive, but we attempt to lean on good and well funded maintenance at Formidable, active
-investment, and good documentation. So you may have to evaluate whether you can get any questions
-answered quickly enough on [GitHub Discussions](https://github.com/FormidableLabs/urql/discussions)
-for instance.
-
 ### Caching and State
 
-|                                                         | urql                                                                  | Apollo                    | Relay                                          |
-| ------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------- | ---------------------------------------------- |
-| Caching Strategy                                        | Document Caching, Normalized Caching with `@urql/exchange-graphcache` | Normalized Caching        | Normalized Caching (schema restrictions apply) |
-| Added Bundle Size                                       | +6.5kB (with Graphcache)                                              | +0 (default)              | +0 (default)                                   |
-| Automatic Garbage Collection                            | ✅                                                                    | 🔶                        | ✅                                             |
-| Local State Management                                  | 🛑                                                                    | ✅                        | ✅                                             |
-| Pagination Support                                      | 🔶                                                                    | 🔶                        | ✅                                             |
-| Optimistic Updates                                      | ✅                                                                    | ✅                        | ✅                                             |
-| Local Updates                                           | ✅                                                                    | ✅                        | ✅                                             |
-| Out-of-band Cache Updates                               | 🛑 (stays true to server data)                                        | ✅                        | ✅                                             |
-| Local Resolvers and Redirects                           | ✅                                                                    | ✅                        | 🛑 (not needed)                                |
-| Complex Resolvers (nested non-normalized return values) | ✅                                                                    | 🛑                        | 🛑 (not needed)                                |
-| Commutativity Guarantees                                | ✅                                                                    | 🛑                        | ✅                                             |
-| Partial Results                                         | ✅                                                                    | ✅                        | 🛑                                             |
-| Safe Partial Results (schema-based)                     | ✅                                                                    | 🛑                        | 🛑                                             |
-| Persistence Support                                     | ✅                                                                    | ✅ `apollo-cache-persist` | 🟡 `@wora/relay-store`                         |
-| Offline Support                                         | ✅                                                                    | 🛑                        | 🟡 `@wora/relay-offline`                       |
+|                                                         | urql                                                                  | Apollo                              | Relay                                          |
+| ------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------- |
+| Caching Strategy                                        | Document Caching, Normalized Caching with `@urql/exchange-graphcache` | Normalized Caching                  | Normalized Caching (schema restrictions apply) |
+| Added Bundle Size                                       | +8kB (with Graphcache)                                                | +0 (default)                        | +0 (default)                                   |
+| Automatic Garbage Collection                            | ✅                                                                    | 🔶                                  | ✅                                             |
+| Local State Management                                  | 🛑                                                                    | ✅                                  | ✅                                             |
+| Pagination Support                                      | 🔶                                                                    | 🔶                                  | ✅                                             |
+| Optimistic Updates                                      | ✅                                                                    | ✅                                  | ✅                                             |
+| Local Updates                                           | ✅                                                                    | ✅                                  | ✅                                             |
+| Out-of-band Cache Updates                               | 🛑 (stays true to server data)                                        | ✅                                  | ✅                                             |
+| Local Resolvers and Redirects                           | ✅                                                                    | ✅                                  | 🛑                                             |
+| Complex Resolvers (nested non-normalized return values) | ✅                                                                    | 🛑                                  | 🛑                                             |
+| Commutativity Guarantees                                | ✅                                                                    | 🛑                                  | ✅                                             |
+| Partial Results                                         | ✅                                                                    | ✅                                  | 🛑                                             |
+| Safe Partial Results (schema-based)                     | ✅                                                                    | 🔶 (experimental via `useFragment`) | 🛑                                             |
+| Persistence Support                                     | ✅                                                                    | ✅ `apollo-cache-persist`           | 🟡 `@wora/relay-store`                         |
+| Offline Support                                         | ✅                                                                    | 🛑                                  | 🟡 `@wora/relay-offline`                       |
 
 `urql` is the only of the three clients that doesn't pick [normalized
 caching](./graphcache/normalized-caching.md) as its default caching strategy. Typically this is seen
@@ -132,14 +120,16 @@ Once you need the same features that you'll find in Relay and Apollo, it's possi
 Graphcache. Graphcache is also slightly different from Apollo's cache and more opinionated as it
 doesn't allow arbitrary cache updates to be made.
 
-`urql` is also the only library that provides [Offline Support](./graphcache/offline.md) out of the
+Local state management is not provided by choice, but could be implemented as an exchange. For more details, [see discussion here](https://github.com/urql-graphql/urql/issues/323#issuecomment-756226783).
+
+`urql` is the only library that provides [Offline Support](./graphcache/offline.md) out of the
 box as part of Graphcache's feature set. There are a number of options for Apollo and Relay including
 writing your own logic for offline caching, which can be particularly successful in Relay, but for
 `@urql/exchange-graphcache` we chose to include it as a feature since it also strengthened other
 guarantees that the cache makes.
 
 Relay does in fact have similar guarantees as [`urql`'s Commutativity
-Guarantees](./graphcache/under-the-hood.md),
+Guarantees](./graphcache/normalized-caching/#deterministic-cache-updates),
 which are more evident when applying list updates out of order under more complex network
 conditions.
 
@@ -154,9 +144,9 @@ You may find that adding features like `@urql/exchange-persisted-fetch` and
 but often this comparison is hard to make. When you start comparing bundle sizes of these three
 GraphQL clients you should keep in mind that:
 
-- Parts of the `graphql` package tree-shake away and may also be replaced (e.g. `parse`)
-- All packages in `urql` reuse parts of `@urql/core` and `wonka`, which means adding all their total
+- Some dependencies may be external and the above sizes listed are total minified+gzipped sizes
+  - `@urql/core` imports from `wonka` for stream utilities and `@0no-co/graphql.web` for GraphQL query
+    language utilities
+  - Other GraphQL clients may import other exernal dependencies.
+- All `urql` packages reuse parts of `@urql/core` and `wonka`, which means adding all their total
   sizes up doesn't give you a correct result of their total expected bundle size.
-- These sizes may change drastically given the code you write and add yourself, but can be managed
-  via precompilation (e.g. with `babel-plugin-graphql-tag` or GraphQL Code Generator for Apollo and
-  `urql`)

@@ -1,7 +1,12 @@
 import { gql } from '@urql/core';
-import { query, write, writeOptimistic } from '../operations';
+import { it, expect, afterEach } from 'vitest';
+import { __initAnd_query as query } from '../operations/query';
+import {
+  __initAnd_write as write,
+  __initAnd_writeOptimistic as writeOptimistic,
+} from '../operations/write';
 import * as InMemoryData from '../store/data';
-import { Store } from '../store';
+import { Store } from '../store/store';
 import { Data } from '../types';
 
 const Todos = gql`
@@ -10,8 +15,8 @@ const Todos = gql`
     todos {
       __typename
       id
-      text
       complete
+      text
     }
   }
 `;
@@ -26,7 +31,7 @@ const TodoFragment = gql`
 `;
 
 const Todo = gql`
-  query($id: ID!) {
+  query ($id: ID!) {
     __typename
     todo(id: $id) {
       id
@@ -37,7 +42,7 @@ const Todo = gql`
 `;
 
 const ToggleTodo = gql`
-  mutation($id: ID!) {
+  mutation ($id: ID!) {
     __typename
     toggleTodo(id: $id) {
       __typename
@@ -49,7 +54,7 @@ const ToggleTodo = gql`
 `;
 
 const NestedClearNameTodo = gql`
-  mutation($id: ID!) {
+  mutation ($id: ID!) {
     __typename
     clearName(id: $id) {
       __typename
@@ -80,12 +85,9 @@ it('passes the "getting-started" example', () => {
 
   const writeRes = write(store, { query: Todos }, todosData);
 
-  expect(writeRes.dependencies).toEqual({
-    'Query.todos': true,
-    'Todo:0': true,
-    'Todo:1': true,
-    'Todo:2': true,
-  });
+  expect(writeRes.dependencies).toEqual(
+    new Set(['Query.todos', 'Todo:0', 'Todo:1', 'Todo:2'])
+  );
 
   let queryRes = query(store, { query: Todos });
 
@@ -107,7 +109,7 @@ it('passes the "getting-started" example', () => {
     }
   );
 
-  expect(mutationRes.dependencies).toEqual({ 'Todo:2': true });
+  expect(mutationRes.dependencies).toEqual(new Set(['Todo:2']));
 
   queryRes = query(store, { query: Todos });
 
@@ -134,7 +136,7 @@ it('passes the "getting-started" example', () => {
     }
   );
 
-  expect(newMutationRes.dependencies).toEqual({ 'Todo:2': true });
+  expect(newMutationRes.dependencies).toEqual(new Set(['Todo:2']));
 
   queryRes = query(store, { query: Todos });
 
@@ -271,12 +273,9 @@ it('respects property-level resolvers when given', () => {
 
   const writeRes = write(store, { query: Todos }, todosData);
 
-  expect(writeRes.dependencies).toEqual({
-    'Query.todos': true,
-    'Todo:0': true,
-    'Todo:1': true,
-    'Todo:2': true,
-  });
+  expect(writeRes.dependencies).toEqual(
+    new Set(['Query.todos', 'Todo:0', 'Todo:1', 'Todo:2'])
+  );
 
   let queryRes = query(store, { query: Todos });
 
@@ -305,7 +304,7 @@ it('respects property-level resolvers when given', () => {
     }
   );
 
-  expect(mutationRes.dependencies).toEqual({ 'Todo:2': true });
+  expect(mutationRes.dependencies).toEqual(new Set(['Todo:2']));
 
   queryRes = query(store, { query: Todos });
 
@@ -410,6 +409,54 @@ it('respects Mutation update functions', () => {
   });
 });
 
+it('respects arbitrary type update functions', () => {
+  const store = new Store({
+    updates: {
+      Todo: {
+        text(result, _, cache) {
+          const fragment = gql`
+            fragment _ on Todo {
+              id
+              complete
+            }
+          `;
+
+          cache.writeFragment(fragment, {
+            id: result.id,
+            complete: true,
+          });
+        },
+      },
+    },
+  });
+
+  const todosData = {
+    __typename: 'Query',
+    todos: [
+      { id: '1', text: 'First', complete: false, __typename: 'Todo' },
+      { id: '2', text: 'Second', complete: false, __typename: 'Todo' },
+    ],
+  };
+
+  write(store, { query: Todos }, todosData);
+  const queryRes = query(store, { query: Todos });
+
+  expect(queryRes.partial).toBe(false);
+  expect(queryRes.data).toEqual({
+    ...todosData,
+    todos: [
+      {
+        ...todosData.todos[0],
+        complete: true,
+      },
+      {
+        ...todosData.todos[1],
+        complete: true,
+      },
+    ],
+  });
+});
+
 it('correctly resolves optimistic updates on Relay schemas', () => {
   const store = new Store({
     optimistic: {
@@ -487,12 +534,41 @@ it('correctly resolves optimistic updates on Relay schemas', () => {
   `;
 
   write(store, { query: getRoot }, queryData);
-  writeOptimistic(store, { query: updateItem, variables: { id: '2' } }, 1);
+  const { dependencies } = writeOptimistic(
+    store,
+    { query: updateItem, variables: { id: '2' } },
+    1
+  );
+  expect(dependencies.size).not.toBe(0);
   InMemoryData.noopDataState(store.data, 1);
   const queryRes = query(store, { query: getRoot });
 
   expect(queryRes.partial).toBe(false);
   expect(queryRes.data).not.toBe(null);
+});
+
+it('skips non-optimistic mutation fields on writes', () => {
+  const store = new Store();
+
+  const updateItem = gql`
+    mutation UpdateItem($id: ID!) {
+      updateItem(id: $id) {
+        __typename
+        item {
+          __typename
+          id
+          name
+        }
+      }
+    }
+  `;
+
+  const { dependencies } = writeOptimistic(
+    store,
+    { query: updateItem, variables: { id: '2' } },
+    1
+  );
+  expect(dependencies.size).toBe(0);
 });
 
 it('allows cumulative optimistic updates', () => {
@@ -624,4 +700,78 @@ it('supports clearing a layer then reapplying optimistic updates', () => {
       { __typename: 'Todo', text: '', complete: false, id: 'optimistic_5' },
     ],
   });
+});
+
+it('supports seeing the same optimistic key multiple times (correctly reorders)', () => {
+  const store = new Store({
+    optimistic: {
+      updateTodo: (args: any) => ({
+        __typename: 'Todo',
+        id: args.id,
+        complete: args.completed,
+      }),
+    },
+  });
+
+  const todosData = {
+    __typename: 'Query',
+    todos: [
+      { id: '0', complete: false, text: '0', __typename: 'Todo' },
+      { id: '1', complete: false, text: '1', __typename: 'Todo' },
+    ],
+  };
+
+  write(store, { query: Todos }, todosData);
+
+  const updateTodo = gql`
+    mutation ($id: ID!, $completed: Boolean!) {
+      __typename
+      updateTodo(id: $id, completed: $completed) {
+        __typename
+        complete
+        id
+      }
+    }
+  `;
+
+  writeOptimistic(
+    store,
+    { query: updateTodo, variables: { id: '0', completed: true } },
+    1
+  );
+
+  let queryRes = query(store, { query: Todos });
+  expect(queryRes.partial).toBe(false);
+  expect(queryRes.data?.todos?.[0]?.complete).toEqual(true);
+
+  writeOptimistic(
+    store,
+    { query: updateTodo, variables: { id: '0', completed: false } },
+    2
+  );
+
+  queryRes = query(store, { query: Todos });
+
+  expect(queryRes.partial).toBe(false);
+  expect(queryRes.data?.todos?.[0]?.complete).toEqual(false);
+
+  writeOptimistic(
+    store,
+    { query: updateTodo, variables: { id: '0', completed: true } },
+    1
+  );
+  queryRes = query(store, { query: Todos });
+  expect(queryRes.partial).toBe(false);
+  expect(queryRes.data?.todos?.[0]?.complete).toEqual(true);
+
+  writeOptimistic(
+    store,
+    { query: updateTodo, variables: { id: '0', completed: false } },
+    2
+  );
+
+  queryRes = query(store, { query: Todos });
+
+  expect(queryRes.partial).toBe(false);
+  expect(queryRes.data?.todos?.[0]?.complete).toEqual(false);
 });

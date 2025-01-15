@@ -1,10 +1,15 @@
-import { reactive, ref } from 'vue';
+import { OperationResult, OperationResultSource } from '@urql/core';
+import { readonly } from 'vue';
+import { vi, expect, it, beforeEach, describe } from 'vitest';
 
-jest.mock('./useClient.ts', () => ({
-  __esModule: true,
-  ...jest.requireActual('./useClient.ts'),
-  useClient: () => ref(client),
-}));
+vi.mock('./useClient.ts', async () => {
+  const { ref } = await vi.importActual<typeof import('vue')>('vue');
+  return {
+    __esModule: true,
+    ...((await vi.importActual('./useClient.ts')) as object),
+    useClient: () => ref(client),
+  };
+});
 
 import { makeSubject } from 'wonka';
 import { createClient, gql } from '@urql/core';
@@ -13,27 +18,25 @@ import { useMutation } from './useMutation';
 const client = createClient({ url: '/graphql', exchanges: [] });
 
 beforeEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
 });
 
 describe('useMutation', () => {
-  it('provides an execute method that resolves a promise', done => {
+  it('provides an execute method that resolves a promise', async () => {
     const subject = makeSubject<any>();
-    const clientMutation = jest
+    const clientMutation = vi
       .spyOn(client, 'executeMutation')
-      .mockImplementation(() => subject.source);
+      .mockImplementation(
+        () => subject.source as OperationResultSource<OperationResult>
+      );
 
-    const mutation = reactive(
-      useMutation(
-        gql`
-          mutation {
-            test
-          }
-        `
-      )
-    );
+    const mutation = useMutation(gql`
+      mutation {
+        test
+      }
+    `);
 
-    expect(mutation).toMatchObject({
+    expect(readonly(mutation)).toMatchObject({
       data: undefined,
       stale: false,
       fetching: false,
@@ -45,19 +48,18 @@ describe('useMutation', () => {
 
     const promise = mutation.executeMutation({ test: true });
 
-    expect(mutation.fetching).toBe(true);
-    expect(mutation.stale).toBe(false);
-    expect(mutation.error).toBe(undefined);
+    expect(mutation.fetching.value).toBe(true);
+    expect(mutation.stale.value).toBe(false);
+    expect(mutation.error.value).toBe(undefined);
 
     expect(clientMutation).toHaveBeenCalledTimes(1);
 
-    subject.next({ data: { test: true } });
-    promise.then(function () {
-      expect(mutation.fetching).toBe(false);
-      expect(mutation.stale).toBe(false);
-      expect(mutation.error).toBe(undefined);
-      expect(mutation.data).toEqual({ test: true });
-      done();
-    });
+    subject.next({ data: { test: true }, stale: false });
+
+    await promise;
+    expect(mutation.fetching.value).toBe(false);
+    expect(mutation.stale.value).toBe(false);
+    expect(mutation.error.value).toBe(undefined);
+    expect(mutation.data.value).toHaveProperty('test', true);
   });
 });

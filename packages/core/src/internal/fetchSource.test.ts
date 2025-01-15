@@ -1,4 +1,14 @@
 import { pipe, scan, subscribe, toPromise } from 'wonka';
+import {
+  vi,
+  expect,
+  it,
+  beforeEach,
+  describe,
+  beforeAll,
+  Mock,
+  afterAll,
+} from 'vitest';
 
 import { queryOperation, context } from '../test-utils';
 import { makeFetchSource } from './fetchSource';
@@ -6,14 +16,11 @@ import { gql } from '../gql';
 import { OperationResult, Operation } from '../types';
 import { makeOperation } from '../utils';
 
-const fetch = (global as any).fetch as jest.Mock;
-const abort = jest.fn();
-
-const abortError = new Error();
-abortError.name = 'AbortError';
+const fetch = (globalThis as any).fetch as Mock;
+const abort = vi.fn();
 
 beforeAll(() => {
-  (global as any).AbortController = function AbortController() {
+  (globalThis as any).AbortController = function AbortController() {
     this.signal = undefined;
     this.abort = abort;
   };
@@ -25,23 +32,24 @@ beforeEach(() => {
 });
 
 afterAll(() => {
-  (global as any).AbortController = undefined;
+  (globalThis as any).AbortController = undefined;
 });
 
-const response = {
+const response = JSON.stringify({
   status: 200,
   data: {
     data: {
       user: 1200,
     },
   },
-};
+});
 
 describe('on success', () => {
   beforeEach(() => {
     fetch.mockResolvedValue({
       status: 200,
-      json: jest.fn().mockResolvedValue(response),
+      headers: { get: () => 'application/json' },
+      text: vi.fn().mockResolvedValue(response),
     });
   });
 
@@ -61,9 +69,10 @@ describe('on success', () => {
 
   it('uses the mock fetch if given', async () => {
     const fetchOptions = {};
-    const fetcher = jest.fn().mockResolvedValue({
+    const fetcher = vi.fn().mockResolvedValue({
       status: 200,
-      json: jest.fn().mockResolvedValue(response),
+      headers: { get: () => 'application/json' },
+      text: vi.fn().mockResolvedValue(response),
     });
 
     const data = await pipe(
@@ -91,8 +100,23 @@ describe('on error', () => {
   beforeEach(() => {
     fetch.mockResolvedValue({
       status: 400,
-      json: jest.fn().mockResolvedValue({}),
+      statusText: 'Forbidden',
+      headers: { get: () => 'application/json' },
+      text: vi.fn().mockResolvedValue('{}'),
     });
+  });
+
+  it('handles network errors', async () => {
+    const error = new Error('test');
+    fetch.mockRejectedValue(error);
+
+    const fetchOptions = {};
+    const data = await pipe(
+      makeFetchSource(queryOperation, 'https://test.com/graphql', fetchOptions),
+      toPromise
+    );
+
+    expect(data).toHaveProperty('error.networkError', error);
   });
 
   it('returns error data', async () => {
@@ -126,9 +150,60 @@ describe('on error', () => {
   });
 });
 
+describe('on unexpected plain text responses', () => {
+  beforeEach(() => {
+    fetch.mockResolvedValue({
+      status: 200,
+      headers: new Map([['Content-Type', 'text/plain']]),
+      text: vi.fn().mockResolvedValue('Some Error Message'),
+    });
+  });
+
+  it('returns error data', async () => {
+    const fetchOptions = {};
+    const result = await pipe(
+      makeFetchSource(queryOperation, 'https://test.com/graphql', fetchOptions),
+      toPromise
+    );
+
+    expect(result.error).toMatchObject({
+      message: '[Network] Some Error Message',
+    });
+  });
+});
+
+describe('on error with non spec-compliant body', () => {
+  beforeEach(() => {
+    fetch.mockResolvedValue({
+      status: 400,
+      statusText: 'Forbidden',
+      headers: { get: () => 'application/json' },
+      text: vi.fn().mockResolvedValue('{"errors":{"detail":"Bad Request"}}'),
+    });
+  });
+
+  it('handles network errors', async () => {
+    const data = await pipe(
+      makeFetchSource(queryOperation, 'https://test.com/graphql', {}),
+      toPromise
+    );
+
+    expect(data).toMatchSnapshot();
+    expect(data).toHaveProperty('error.networkError.message', 'Forbidden');
+  });
+});
+
 describe('on teardown', () => {
-  it('does not start the outgoing request on immediate teardowns', () => {
-    fetch.mockRejectedValue(abortError);
+  const fail = () => {
+    expect(true).toEqual(false);
+  };
+
+  it('does not start the outgoing request on immediate teardowns', async () => {
+    fetch.mockImplementation(async () => {
+      await new Promise(() => {
+        /*noop*/
+      });
+    });
 
     const { unsubscribe } = pipe(
       makeFetchSource(queryOperation, 'https://test.com/graphql', {}),
@@ -136,21 +211,33 @@ describe('on teardown', () => {
     );
 
     unsubscribe();
+
+    // NOTE: We can only observe the async iterator's final run after a macro tick
+
+    await new Promise(resolve => setTimeout(resolve));
     expect(fetch).toHaveBeenCalledTimes(0);
     expect(abort).toHaveBeenCalledTimes(1);
   });
 
   it('aborts the outgoing request', async () => {
-    fetch.mockRejectedValue(abortError);
+    fetch.mockResolvedValue({
+      status: 200,
+      headers: new Map([['Content-Type', 'application/json']]),
+      text: vi.fn().mockResolvedValue('{ "data": null }'),
+    });
 
     const { unsubscribe } = pipe(
       makeFetchSource(queryOperation, 'https://test.com/graphql', {}),
-      subscribe(fail)
+      subscribe(() => {
+        /*noop*/
+      })
     );
 
-    await Promise.resolve();
-
+    await new Promise(resolve => setTimeout(resolve));
     unsubscribe();
+
+    // NOTE: We can only observe the async iterator's final run after a macro tick
+    await new Promise(resolve => setTimeout(resolve));
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(abort).toHaveBeenCalledTimes(1);
   });
@@ -163,133 +250,7 @@ describe('on multipart/mixed', () => {
     JSON.stringify(json) +
     '\r\n---';
 
-  it('listens for more responses (stream)', async () => {
-    fetch.mockResolvedValue({
-      status: 200,
-      headers: {
-        get() {
-          return 'multipart/mixed';
-        },
-      },
-      body: {
-        getReader: function () {
-          let cancelled = false;
-          const results = [
-            {
-              done: false,
-              value: Buffer.from('\r\n---'),
-            },
-            {
-              done: false,
-              value: Buffer.from(
-                wrap({
-                  hasNext: true,
-                  data: {
-                    author: {
-                      id: '1',
-                      name: 'Steve',
-                      __typename: 'Author',
-                      todos: [{ id: '1', text: 'stream', __typename: 'Todo' }],
-                    },
-                  },
-                })
-              ),
-            },
-            {
-              done: false,
-              value: Buffer.from(
-                wrap({
-                  path: ['author', 'todos', 1],
-                  data: { id: '2', text: 'defer', __typename: 'Todo' },
-                  hasNext: true,
-                })
-              ),
-            },
-            {
-              done: false,
-              value: Buffer.from(wrap({ hasNext: false }) + '--'),
-            },
-            { done: true },
-          ];
-          let count = 0;
-          return {
-            cancel: function () {
-              cancelled = true;
-            },
-            read: function () {
-              if (cancelled) throw new Error('No');
-
-              return Promise.resolve(results[count++]);
-            },
-          };
-        },
-      },
-    });
-
-    const streamedQueryOperation: Operation = makeOperation(
-      'query',
-      {
-        query: gql`
-          query {
-            author {
-              id
-              name
-              todos @stream {
-                id
-                text
-              }
-            }
-          }
-        `,
-        variables: {},
-        key: 1,
-      },
-      context
-    );
-
-    const chunks: OperationResult[] = await pipe(
-      makeFetchSource(streamedQueryOperation, 'https://test.com/graphql', {}),
-      scan((prev: OperationResult[], item) => [...prev, item], []),
-      toPromise
-    );
-
-    expect(chunks.length).toEqual(3);
-
-    expect(chunks[0].data).toEqual({
-      author: {
-        id: '1',
-        name: 'Steve',
-        __typename: 'Author',
-        todos: [{ id: '1', text: 'stream', __typename: 'Todo' }],
-      },
-    });
-
-    expect(chunks[1].data).toEqual({
-      author: {
-        id: '1',
-        name: 'Steve',
-        __typename: 'Author',
-        todos: [
-          { id: '1', text: 'stream', __typename: 'Todo' },
-          { id: '2', text: 'defer', __typename: 'Todo' },
-        ],
-      },
-    });
-
-    expect(chunks[2].data).toEqual({
-      author: {
-        id: '1',
-        name: 'Steve',
-        __typename: 'Author',
-        todos: [
-          { id: '1', text: 'stream', __typename: 'Todo' },
-          { id: '2', text: 'defer', __typename: 'Todo' },
-        ],
-      },
-    });
-  });
-
-  it('listens for more responses (defer)', async () => {
+  it('listens for more streamed responses', async () => {
     fetch.mockResolvedValue({
       status: 200,
       headers: {
@@ -323,8 +284,12 @@ describe('on multipart/mixed', () => {
               done: false,
               value: Buffer.from(
                 wrap({
-                  path: ['author'],
-                  data: { name: 'Steve' },
+                  incremental: [
+                    {
+                      path: ['author'],
+                      data: { name: 'Steve' },
+                    },
+                  ],
                   hasNext: true,
                 })
               ),
@@ -406,13 +371,17 @@ describe('on multipart/mixed', () => {
       },
     });
   });
+});
 
-  it('listens for more responses (defer-neted)', async () => {
+describe('on text/event-stream', () => {
+  const wrap = (json: object) => 'data: ' + JSON.stringify(json) + '\n\n';
+
+  it('listens for streamed responses', async () => {
     fetch.mockResolvedValue({
       status: 200,
       headers: {
         get() {
-          return 'multipart/mixed';
+          return 'text/event-stream';
         },
       },
       body: {
@@ -421,21 +390,12 @@ describe('on multipart/mixed', () => {
           const results = [
             {
               done: false,
-              value: Buffer.from('\r\n---'),
-            },
-            {
-              done: false,
               value: Buffer.from(
                 wrap({
                   hasNext: true,
                   data: {
                     author: {
                       id: '1',
-                      name: 'Steve',
-                      address: {
-                        country: 'UK',
-                        __typename: 'Address',
-                      },
                       __typename: 'Author',
                     },
                   },
@@ -446,15 +406,19 @@ describe('on multipart/mixed', () => {
               done: false,
               value: Buffer.from(
                 wrap({
-                  path: ['author', 'address'],
-                  data: { street: 'home' },
+                  incremental: [
+                    {
+                      path: ['author'],
+                      data: { name: 'Steve' },
+                    },
+                  ],
                   hasNext: true,
                 })
               ),
             },
             {
               done: false,
-              value: Buffer.from(wrap({ hasNext: false }) + '--'),
+              value: Buffer.from(wrap({ hasNext: false })),
             },
             { done: true },
           ];
@@ -473,9 +437,9 @@ describe('on multipart/mixed', () => {
       },
     });
 
-    const AddressFragment = gql`
-      fragment addressFields on Address {
-        street
+    const AuthorFragment = gql`
+      fragment authorFields on Author {
+        name
       }
     `;
 
@@ -486,15 +450,11 @@ describe('on multipart/mixed', () => {
           query {
             author {
               id
-              address {
-                id
-                country
-                ...addressFields @defer
-              }
+              ...authorFields @defer
             }
           }
 
-          ${AddressFragment}
+          ${AuthorFragment}
         `,
         variables: {},
         key: 1,
@@ -513,11 +473,6 @@ describe('on multipart/mixed', () => {
     expect(chunks[0].data).toEqual({
       author: {
         id: '1',
-        name: 'Steve',
-        address: {
-          country: 'UK',
-          __typename: 'Address',
-        },
         __typename: 'Author',
       },
     });
@@ -526,11 +481,134 @@ describe('on multipart/mixed', () => {
       author: {
         id: '1',
         name: 'Steve',
-        address: {
-          country: 'UK',
-          street: 'home',
-          __typename: 'Address',
+        __typename: 'Author',
+      },
+    });
+
+    expect(chunks[2].data).toEqual({
+      author: {
+        id: '1',
+        name: 'Steve',
+        __typename: 'Author',
+      },
+    });
+  });
+
+  it('merges deferred results on the root-type', async () => {
+    fetch.mockResolvedValue({
+      status: 200,
+      headers: {
+        get() {
+          return 'text/event-stream';
         },
+      },
+      body: {
+        getReader: function () {
+          let cancelled = false;
+          const results = [
+            {
+              done: false,
+              value: Buffer.from(
+                wrap({
+                  hasNext: true,
+                  data: {
+                    author: {
+                      id: '1',
+                      __typename: 'Author',
+                    },
+                  },
+                })
+              ),
+            },
+            {
+              done: false,
+              value: Buffer.from(
+                wrap({
+                  incremental: [
+                    {
+                      path: [],
+                      data: { author: { name: 'Steve' } },
+                    },
+                  ],
+                  hasNext: true,
+                })
+              ),
+            },
+            {
+              done: false,
+              value: Buffer.from(wrap({ hasNext: false })),
+            },
+            { done: true },
+          ];
+          let count = 0;
+          return {
+            cancel: function () {
+              cancelled = true;
+            },
+            read: function () {
+              if (cancelled) throw new Error('No');
+
+              return Promise.resolve(results[count++]);
+            },
+          };
+        },
+      },
+    });
+
+    const AuthorFragment = gql`
+      fragment authorFields on Query {
+        author {
+          name
+        }
+      }
+    `;
+
+    const streamedQueryOperation: Operation = makeOperation(
+      'query',
+      {
+        query: gql`
+          query {
+            author {
+              id
+              ...authorFields @defer
+            }
+          }
+
+          ${AuthorFragment}
+        `,
+        variables: {},
+        key: 1,
+      },
+      context
+    );
+
+    const chunks: OperationResult[] = await pipe(
+      makeFetchSource(streamedQueryOperation, 'https://test.com/graphql', {}),
+      scan((prev: OperationResult[], item) => [...prev, item], []),
+      toPromise
+    );
+
+    expect(chunks.length).toEqual(3);
+
+    expect(chunks[0].data).toEqual({
+      author: {
+        id: '1',
+        __typename: 'Author',
+      },
+    });
+
+    expect(chunks[1].data).toEqual({
+      author: {
+        id: '1',
+        name: 'Steve',
+        __typename: 'Author',
+      },
+    });
+
+    expect(chunks[2].data).toEqual({
+      author: {
+        id: '1',
+        name: 'Steve',
         __typename: 'Author',
       },
     });

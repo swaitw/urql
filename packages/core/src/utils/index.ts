@@ -1,9 +1,9 @@
 export * from './error';
 export * from './request';
 export * from './result';
-export * from './typenames';
-export * from './stringifyVariables';
-export * from './maskTypename';
+export * from './variables';
+export * from './collectTypenames';
+export * from './formatDocument';
 export * from './streamUtils';
 export * from './operation';
 

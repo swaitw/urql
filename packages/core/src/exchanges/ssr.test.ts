@@ -1,9 +1,10 @@
 import { makeSubject, pipe, map, publish, forEach, Subject } from 'wonka';
+import { vi, expect, it, beforeEach, afterEach } from 'vitest';
 
 import { Client } from '../client';
 import { queryOperation, queryResponse } from '../test-utils';
 import { ExchangeIO, Operation, OperationResult } from '../types';
-import { CombinedError } from '../utils';
+import { CombinedError, formatDocument } from '../utils';
 import { ssrExchange } from './ssr';
 
 let forward: ExchangeIO;
@@ -19,7 +20,7 @@ const serializedQueryResponse = {
 
 beforeEach(() => {
   input = makeSubject<Operation>();
-  output = jest.fn(operation => ({ operation }));
+  output = vi.fn(operation => ({ operation }));
   forward = ops$ => pipe(ops$, map(output));
   client = { suspense: true } as any;
   exchangeInput = { forward, client };
@@ -46,12 +47,14 @@ it('caches query results correctly', () => {
     [queryOperation.key]: {
       data: serializedQueryResponse.data,
       error: undefined,
+      hasNext: false,
     },
   });
 });
 
 it('serializes query results quickly', () => {
-  const queryResponse: OperationResult = {
+  const result: OperationResult = {
+    ...queryResponse,
     operation: queryOperation,
     data: {
       user: {
@@ -61,11 +64,11 @@ it('serializes query results quickly', () => {
   };
 
   const serializedQueryResponse = {
-    ...queryResponse,
-    data: JSON.stringify(queryResponse.data),
+    ...result,
+    data: JSON.stringify(result.data),
   };
 
-  output.mockReturnValueOnce(queryResponse);
+  output.mockReturnValueOnce(result);
 
   const ssr = ssrExchange();
   const { source: ops$, next } = input;
@@ -73,7 +76,7 @@ it('serializes query results quickly', () => {
 
   publish(exchange);
   next(queryOperation);
-  queryResponse.data.user.name = 'Not Clive';
+  result.data.user.name = 'Not Clive';
 
   const data = ssr.extractData();
   expect(Object.keys(data)).toEqual(['' + queryOperation.key]);
@@ -82,6 +85,7 @@ it('serializes query results quickly', () => {
     [queryOperation.key]: {
       data: serializedQueryResponse.data,
       error: undefined,
+      hasNext: false,
     },
   });
 });
@@ -118,6 +122,7 @@ it('caches errored query results correctly', () => {
         ],
         networkError: undefined,
       },
+      hasNext: false,
     },
   });
 });
@@ -146,6 +151,7 @@ it('caches extensions when includeExtensions=true', () => {
     [queryOperation.key]: {
       data: '{"user":{"name":"Clive"}}',
       extensions: '{"foo":"bar"}',
+      hasNext: false,
     },
   });
 });
@@ -180,7 +186,7 @@ it('caches complex GraphQLErrors in query results correctly', () => {
 });
 
 it('resolves cached query results correctly', () => {
-  const onPush = jest.fn();
+  const onPush = vi.fn();
 
   const ssr = ssrExchange({
     initialState: { [queryOperation.key]: serializedQueryResponse as any },
@@ -195,18 +201,31 @@ it('resolves cached query results correctly', () => {
   const data = ssr.extractData();
   expect(Object.keys(data).length).toBe(1);
   expect(output).not.toHaveBeenCalled();
-  expect(onPush).toHaveBeenCalledWith(queryResponse);
+  expect(onPush).toHaveBeenCalledWith({
+    ...queryResponse,
+    stale: false,
+    hasNext: false,
+    operation: {
+      ...queryResponse.operation,
+      context: {
+        ...queryResponse.operation.context,
+        meta: {
+          cacheOutcome: 'hit',
+        },
+      },
+    },
+  });
 });
 
 it('resolves deferred, cached query results correctly', () => {
-  const onPush = jest.fn();
+  const onPush = vi.fn();
 
   const ssr = ssrExchange({
     isClient: true,
     initialState: {
       [queryOperation.key]: {
-        hasNext: true,
         ...(serializedQueryResponse as any),
+        hasNext: true,
       },
     },
   });
@@ -221,12 +240,29 @@ it('resolves deferred, cached query results correctly', () => {
   expect(Object.keys(data).length).toBe(1);
   expect(output).toHaveBeenCalledTimes(1);
   expect(onPush).toHaveBeenCalledTimes(2);
-  expect(onPush.mock.calls[1][0]).toEqual({ hasNext: true, ...queryResponse });
+  expect(onPush.mock.calls[1][0]).toEqual({
+    ...queryResponse,
+    hasNext: true,
+    stale: false,
+    operation: {
+      ...queryResponse.operation,
+      context: {
+        ...queryResponse.operation.context,
+        meta: {
+          cacheOutcome: 'hit',
+        },
+      },
+    },
+  });
+
+  expect(output.mock.calls[0][0].query).toBe(
+    formatDocument(queryOperation.query)
+  );
 });
 
 it('deletes cached results in non-suspense environments', async () => {
   client.suspense = false;
-  const onPush = jest.fn();
+  const onPush = vi.fn();
   const ssr = ssrExchange();
 
   ssr.restoreData({ [queryOperation.key]: serializedQueryResponse as any });
@@ -241,7 +277,20 @@ it('deletes cached results in non-suspense environments', async () => {
   await Promise.resolve();
 
   expect(Object.keys(ssr.extractData()).length).toBe(0);
-  expect(onPush).toHaveBeenCalledWith(queryResponse);
+  expect(onPush).toHaveBeenCalledWith({
+    ...queryResponse,
+    stale: false,
+    hasNext: false,
+    operation: {
+      ...queryResponse.operation,
+      context: {
+        ...queryResponse.operation.context,
+        meta: {
+          cacheOutcome: 'hit',
+        },
+      },
+    },
+  });
 
   // NOTE: The operation should not be duplicated
   expect(output).not.toHaveBeenCalled();
@@ -250,7 +299,7 @@ it('deletes cached results in non-suspense environments', async () => {
 it('never allows restoration of invalidated results', async () => {
   client.suspense = false;
 
-  const onPush = jest.fn();
+  const onPush = vi.fn();
   const initialState = { [queryOperation.key]: serializedQueryResponse as any };
 
   const ssr = ssrExchange({

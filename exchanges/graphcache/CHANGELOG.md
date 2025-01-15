@@ -1,5 +1,440 @@
 # @urql/exchange-graphcache
 
+## 7.2.1
+
+### Patch Changes
+
+- Update selection iterator implementation for JSC memory reduction
+  Submitted by [@kitten](https://github.com/kitten) (See [#3693](https://github.com/urql-graphql/urql/pull/3693))
+
+## 7.2.0
+
+### Minor Changes
+
+- Allow @\_required directive to be used in combination with configured schemas
+  Submitted by [@AndrewIngram](https://github.com/AndrewIngram) (See [#3685](https://github.com/urql-graphql/urql/pull/3685))
+
+## 7.1.3
+
+### Patch Changes
+
+- ⚠️ fix bug that mutation would cause dependent operations and reexecuting operations to become the same set
+  Submitted by [@xuanduc987](https://github.com/xuanduc987) (See [#3665](https://github.com/urql-graphql/urql/pull/3665))
+
+## 7.1.2
+
+### Patch Changes
+
+- Disregard write-only operation when fragment-matching with schema awareness
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3621](https://github.com/urql-graphql/urql/pull/3621))
+
+## 7.1.1
+
+### Patch Changes
+
+- ⚠️ Fix where we would incorrectly match all fragment concrete types because they belong to the abstract type
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3603](https://github.com/urql-graphql/urql/pull/3603))
+
+## 7.1.0
+
+### Minor Changes
+
+- Mark `@urql/core` as a peer dependency as well as a regular dependency
+  Submitted by [@kitten](https://github.com/kitten) (See [#3579](https://github.com/urql-graphql/urql/pull/3579))
+
+## 7.0.2
+
+### Patch Changes
+
+- Only record dependencies that are changing data, this will reduce the amount of operations we re-invoke due to network-only/cache-and-network queries and mutations
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3564](https://github.com/urql-graphql/urql/pull/3564))
+
+## 7.0.1
+
+### Patch Changes
+
+- When invoking the automatic creation updater ignore the entity we are currently on in the mutation
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3560](https://github.com/urql-graphql/urql/pull/3560))
+
+## 7.0.0
+
+### Major Changes
+
+- Add a default updater for mutation fields who are lacking an updater and where the returned entity is not present in the cache
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3518](https://github.com/urql-graphql/urql/pull/3518))
+- Remove deprecated `resolveFieldByKey`, use `cache.resolve` instead
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3520](https://github.com/urql-graphql/urql/pull/3520))
+
+### Minor Changes
+
+- Track abstract types being written so that we have a more reliable way of matching abstract fragments
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3548](https://github.com/urql-graphql/urql/pull/3548))
+
+### Patch Changes
+
+- ⚠️ Fix `invalidate` not applying when using a string to invalidate an entity
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3545](https://github.com/urql-graphql/urql/pull/3545))
+- Upgrade `@0no-co/graphql.web` to `1.0.5`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3553](https://github.com/urql-graphql/urql/pull/3553))
+- Updated dependencies (See [#3520](https://github.com/urql-graphql/urql/pull/3520), [#3553](https://github.com/urql-graphql/urql/pull/3553), and [#3520](https://github.com/urql-graphql/urql/pull/3520))
+  - @urql/core@5.0.0
+
+## 6.5.0
+
+### Minor Changes
+
+- Allow `@_optional` and `@_required` to be placed on fragment definitions and inline fragments
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3502](https://github.com/urql-graphql/urql/pull/3502))
+- Track list of entity keys for a given type name. This enables enumerating and invalidating all entities of a given type within the normalized cache
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3501](https://github.com/urql-graphql/urql/pull/3501))
+
+### Patch Changes
+
+- Prevent `@defer` from being applied in child field selections. Previously, a child field (i.e. a nested field) under a `@defer`-ed fragment would also become optional, which was based on a prior version of the DeferStream spec which didn't require deferred fields to be delivered as a group
+  Submitted by [@kitten](https://github.com/kitten) (See [#3517](https://github.com/urql-graphql/urql/pull/3517))
+- ⚠️ Fix `store.resolve()` returning the exact link array that’s used by the cache. This can lead to subtle bugs when a user mutates the result returned by `cache.resolve()`, since this directly mutates what’s in the cache at that layer
+  Submitted by [@kitten](https://github.com/kitten) (See [#3516](https://github.com/urql-graphql/urql/pull/3516))
+- Updated dependencies (See [#3514](https://github.com/urql-graphql/urql/pull/3514), [#3505](https://github.com/urql-graphql/urql/pull/3505), [#3499](https://github.com/urql-graphql/urql/pull/3499), and [#3515](https://github.com/urql-graphql/urql/pull/3515))
+  - @urql/core@4.3.0
+
+## 6.4.1
+
+### Patch Changes
+
+- Set `stale: true` on cache results, even if a reexecution has been blocked by the loop protection, if the operation is already pending and in-flight
+  Submitted by [@kitten](https://github.com/kitten) (See [#3493](https://github.com/urql-graphql/urql/pull/3493))
+- ⚠️ Fix `@defer` state leaking into following operations
+  Submitted by [@kitten](https://github.com/kitten) (See [#3497](https://github.com/urql-graphql/urql/pull/3497))
+
+## 6.4.0
+
+### Minor Changes
+
+- Allow the user to debug cache-misses by means of the new `logger` interface on the `cacheExchange`. A field miss will dispatch a `debug` log when it's not marked with `@_optional` or when it's non-nullable in the `schema`
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3446](https://github.com/urql-graphql/urql/pull/3446))
+- Add `onCacheHydrated` as an option for the `StorageAdapter`
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3428](https://github.com/urql-graphql/urql/pull/3428))
+- Add optional `logger` to the options, this allows you to filter out warnings or disable them all together
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3444](https://github.com/urql-graphql/urql/pull/3444))
+
+## 6.3.3
+
+### Patch Changes
+
+- ⚠️ Fix a typo that caused an inverted condition, for checking owned data, to cause incorrect results when handling `null` values and encountering them first
+  Submitted by [@kitten](https://github.com/kitten) (See [#3371](https://github.com/urql-graphql/urql/pull/3371))
+
+## 6.3.2
+
+### Patch Changes
+
+- ⚠️ Fix extra variables in mutation results regressing by a change made in [#3317](https://github.com/urql-graphql/urql/pull/3317). The original operation wasn't being preserved anymore
+  Submitted by [@kitten](https://github.com/kitten) (See [#3356](https://github.com/urql-graphql/urql/pull/3356))
+
+## 6.3.1
+
+### Patch Changes
+
+- Reset `partial` result marker when reading from selections when a child value sees a cache miss. This only affects resolvers on child values enabling `info.partial` while a parent may abort early instead
+  Submitted by [@kitten](https://github.com/kitten) (See [#3340](https://github.com/urql-graphql/urql/pull/3340))
+- ⚠️ Fix `@_optional` directive not setting `info.partial = true` on cache miss and fix usage of `info.parentKey` and `info.parentFieldKey` usage in default directives
+  Submitted by [@kitten](https://github.com/kitten) (See [#3338](https://github.com/urql-graphql/urql/pull/3338))
+- Replace implementation for `@_optional` and `@_required` with built-in handling inside cache reads to allow `@_optional` to work for nested selection sets
+  Submitted by [@kitten](https://github.com/kitten) (See [#3341](https://github.com/urql-graphql/urql/pull/3341))
+
+## 6.3.0
+
+### Minor Changes
+
+- Allow scalar values on the parent to be accessed from `parent[info.fieldName]` consistently. Prior to this change `parent[fieldAlias]` would get populated, which wouldn’t always result in a field that’s consistently accessible
+  Submitted by [@kitten](https://github.com/kitten) (See [#3336](https://github.com/urql-graphql/urql/pull/3336))
+- Allow `cache.resolve` to return `undefined` when a value is not cached to make it easier to cause a cache miss in resolvers. **Reminder:** Returning `undefined` from a resolver means a field is uncached, while returning `null` means that a field’s value is `null` without causing a cache miss
+  Submitted by [@kitten](https://github.com/kitten) (See [#3333](https://github.com/urql-graphql/urql/pull/3333))
+
+### Patch Changes
+
+- Record a dependency when `__typename` field is read. This removes a prior, outdated exception to avoid confusion when using `cache.resolve(entity, '__typename')` which doesn't cause the cache to record a dependency
+  Submitted by [@kitten](https://github.com/kitten) (See [#3335](https://github.com/urql-graphql/urql/pull/3335))
+- ⚠️ Fix cases where `ResolveInfo`’s `parentFieldKey` was incorrectly populated with a key that isn’t a field key (allowing for `cache.resolve(info.parentKey, info.parentFieldKey)` to be possible) but was instead set to `info.parentKey` combined with the field key
+  Submitted by [@kitten](https://github.com/kitten) (See [#3336](https://github.com/urql-graphql/urql/pull/3336))
+
+## 6.2.0
+
+### Minor Changes
+
+- Implement **local directives**. It’s now possible to add client-only directives to queries by adding them to the `cacheExchange`’s new `directives` option.
+  Directives accept an object of their arguments and return a resolver. When a field is annotated with
+  a resolver, e.g. `@_optional` or `@_required`, their resolvers from the `directives` config are
+  executed. This means it’s now possible to use `@_relayPagination` for example, by passing adding
+  the `relayPagination` helper to the config.
+  Due to the change in [#3317](https://github.com/urql-graphql/urql/pull/3317), any directive in
+  queries that’s prefixed with an underscore (`_`) is only visible to Graphcache and not the API.
+  Submitted by undefined (See https://github.com/urql-graphql/urql/pull/3306)
+
+### Patch Changes
+
+- Use new `FormattedNode` / `formatDocument` functionality added to `@urql/core` to slightly speed up directive processing by using the client-side `_directives` dictionary that `formatDocument` adds
+  Submitted by [@kitten](https://github.com/kitten) (See [#3317](https://github.com/urql-graphql/urql/pull/3317))
+- Allow `offlineExchange` to once again issue all request policies, instead of mapping them to `cache-first`. When replaying operations after rehydrating it will now prioritise network policies, and before rehydrating receiving a network result will prevent a network request from being issued again
+  Submitted by [@kitten](https://github.com/kitten) (See [#3308](https://github.com/urql-graphql/urql/pull/3308))
+- Add `OperationContext.optimistic` flag as an internal indication on whether a mutation triggered an optimistic update in `@urql/exchange-graphcache`'s `cacheExchange`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3308](https://github.com/urql-graphql/urql/pull/3308))
+- Updated dependencies (See [#3317](https://github.com/urql-graphql/urql/pull/3317) and [#3308](https://github.com/urql-graphql/urql/pull/3308))
+  - @urql/core@4.1.0
+
+## 6.1.4
+
+### Patch Changes
+
+- ⚠️ Fix untranspiled class property initializer syntax being leftover in build output. (Regression in #3053)
+  Submitted by [@kitten](https://github.com/kitten) (See [#3275](https://github.com/urql-graphql/urql/pull/3275))
+
+## 6.1.3
+
+### Patch Changes
+
+- ⚠️ Fix `info.parentKey` not being correctly set for updaters or optimistic updaters
+  Submitted by [@kitten](https://github.com/kitten) (See [#3267](https://github.com/urql-graphql/urql/pull/3267))
+
+## 6.1.2
+
+### Patch Changes
+
+- Make "Invalid undefined" warning heuristic smarter and allow for partial optimistic results. Previously, when a partial optimistic result would be passed, a warning would be issued, and in production, fields would be deleted from the cache. Instead, we now only issue a warning if these fields aren't cached already
+  Submitted by [@kitten](https://github.com/kitten) (See [#3264](https://github.com/urql-graphql/urql/pull/3264))
+- Optimistic mutation results should never result in dependent operations being blocked
+  Submitted by [@kitten](https://github.com/kitten) (See [#3265](https://github.com/urql-graphql/urql/pull/3265))
+
+## 6.1.1
+
+### Patch Changes
+
+- ⚠️ Fix torn down queries not being removed from `offlineExchange`’s failed queue on rehydration
+  Submitted by [@kitten](https://github.com/kitten) (See [#3236](https://github.com/urql-graphql/urql/pull/3236))
+
+## 6.1.0
+
+### Minor Changes
+
+- Add `globalIDs` configuration option to omit typenames in cache keys
+  Submitted by [@kitten](https://github.com/kitten) (See [#3224](https://github.com/urql-graphql/urql/pull/3224))
+
+### Patch Changes
+
+- Update build process to generate correct source maps
+  Submitted by [@kitten](https://github.com/kitten) (See [#3201](https://github.com/urql-graphql/urql/pull/3201))
+- Prevent `offlineExchange` from issuing duplicate operations
+  Submitted by [@kitten](https://github.com/kitten) (See [#3200](https://github.com/urql-graphql/urql/pull/3200))
+- ⚠️ Fix reference equality not being preserved. This is a fix on top of [#3165](https://github.com/urql-graphql/urql/pull/3165), and was previously not addressed to avoid having to test for corner cases that are hard to cover. If you experience issues with this fix, please let us know
+  Submitted by [@kitten](https://github.com/kitten) (See [#3228](https://github.com/urql-graphql/urql/pull/3228))
+- Retry operations against offline cache and stabilize timing of flushing failed operations queue after rehydrating the storage data
+  Submitted by [@kitten](https://github.com/kitten) (See [#3196](https://github.com/urql-graphql/urql/pull/3196))
+
+## 6.0.4
+
+### Patch Changes
+
+- ⚠️ Fix missing cache updates, when a query that was previously torn down restarts and retrieves results from the cache. In this case a regression caused cache updates to not be correctly applied to the queried results, since the operation wouldn’t be recognised properly
+  Submitted by [@kitten](https://github.com/kitten) (See [#3193](https://github.com/urql-graphql/urql/pull/3193))
+
+## 6.0.3
+
+### Patch Changes
+
+- Publish with npm provenance
+  Submitted by [@kitten](https://github.com/kitten) (See [#3180](https://github.com/urql-graphql/urql/pull/3180))
+
+## 6.0.2
+
+### Patch Changes
+
+- Prevent reusal of incoming API data in Graphcache’s produced (“owned”) data. This prevents us from copying the `__typename` and other superfluous fields
+  Submitted by [@kitten](https://github.com/kitten) (See [#3165](https://github.com/urql-graphql/urql/pull/3165))
+- ⚠️ Fix regression which caused `@defer` directives from becoming “sticky” and causing every subsequent cache read to be treated as if the field was deferred
+  Submitted by [@kitten](https://github.com/kitten) (See [#3167](https://github.com/urql-graphql/urql/pull/3167))
+- Apply `hasNext: true` and fallthrough logic to cached queries that contain deferred, uncached fields. Deferred query results will now be fetched against the API correctly, even if prior requests have been incomplete
+  Submitted by [@kitten](https://github.com/kitten) (See [#3163](https://github.com/urql-graphql/urql/pull/3163))
+- ⚠️ Fix `offlineExchange` duplicating offline mutations in failed queue
+  Submitted by [@kitten](https://github.com/kitten) (See [#3158](https://github.com/urql-graphql/urql/pull/3158))
+
+## 6.0.1
+
+### Patch Changes
+
+- Remove inclusion and usage of optional chaining operator
+  Submitted by [@kitten](https://github.com/kitten) (See [#3116](https://github.com/urql-graphql/urql/pull/3116))
+
+## 6.0.0
+
+### Major Changes
+
+- Remove dependence on `graphql` package and replace it with `@0no-co/graphql.web`, which reduces the default bundlesize impact of `urql` packages to a minimum. All types should remain compatible, even if you use `graphql` elsewhere in your app, and if other dependencies are using `graphql` you may alias it to `graphql-web-lite`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3097](https://github.com/urql-graphql/urql/pull/3097))
+- Update `OperationResult.hasNext` and `OperationResult.stale` to be required fields. If you have a custom exchange creating results, you'll have to add these fields or use the `makeResult`, `mergeResultPatch`, or `makeErrorResult` helpers
+  Submitted by [@kitten](https://github.com/kitten) (See [#3061](https://github.com/urql-graphql/urql/pull/3061))
+
+### Minor Changes
+
+- Update exchanges to drop redundant `share` calls, since `@urql/core`’s `composeExchanges` utility now automatically does so for us
+  Submitted by [@kitten](https://github.com/kitten) (See [#3082](https://github.com/urql-graphql/urql/pull/3082))
+
+### Patch Changes
+
+- ⚠️ Fix source maps included with recently published packages, which lost their `sourcesContent`, including additional source files, and had incorrect paths in some of them
+  Submitted by [@kitten](https://github.com/kitten) (See [#3053](https://github.com/urql-graphql/urql/pull/3053))
+- Upgrade to `wonka@^6.3.0`
+  Submitted by [@kitten](https://github.com/kitten) (See [#3104](https://github.com/urql-graphql/urql/pull/3104))
+- Restore variables correctly on mutations
+  Submitted by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#3046](https://github.com/urql-graphql/urql/pull/3046))
+- Use `stringifyDocument` in `offlineExchange` rather than `print` and serialize `operation.extensions` as needed
+  Submitted by [@kitten](https://github.com/kitten) (See [#3094](https://github.com/urql-graphql/urql/pull/3094))
+- Add missing `hasNext` and `stale` passthroughs on caching exchanges
+  Submitted by [@kitten](https://github.com/kitten) (See [#3059](https://github.com/urql-graphql/urql/pull/3059))
+- Add TSDocs for all exchanges, documenting API internals
+  Submitted by [@kitten](https://github.com/kitten) (See [#3072](https://github.com/urql-graphql/urql/pull/3072))
+- Updated dependencies (See [#3101](https://github.com/urql-graphql/urql/pull/3101), [#3033](https://github.com/urql-graphql/urql/pull/3033), [#3054](https://github.com/urql-graphql/urql/pull/3054), [#3053](https://github.com/urql-graphql/urql/pull/3053), [#3060](https://github.com/urql-graphql/urql/pull/3060), [#3081](https://github.com/urql-graphql/urql/pull/3081), [#3039](https://github.com/urql-graphql/urql/pull/3039), [#3104](https://github.com/urql-graphql/urql/pull/3104), [#3082](https://github.com/urql-graphql/urql/pull/3082), [#3097](https://github.com/urql-graphql/urql/pull/3097), [#3061](https://github.com/urql-graphql/urql/pull/3061), [#3055](https://github.com/urql-graphql/urql/pull/3055), [#3085](https://github.com/urql-graphql/urql/pull/3085), [#3079](https://github.com/urql-graphql/urql/pull/3079), [#3087](https://github.com/urql-graphql/urql/pull/3087), [#3059](https://github.com/urql-graphql/urql/pull/3059), [#3055](https://github.com/urql-graphql/urql/pull/3055), [#3057](https://github.com/urql-graphql/urql/pull/3057), [#3050](https://github.com/urql-graphql/urql/pull/3050), [#3062](https://github.com/urql-graphql/urql/pull/3062), [#3051](https://github.com/urql-graphql/urql/pull/3051), [#3043](https://github.com/urql-graphql/urql/pull/3043), [#3063](https://github.com/urql-graphql/urql/pull/3063), [#3054](https://github.com/urql-graphql/urql/pull/3054), [#3102](https://github.com/urql-graphql/urql/pull/3102), [#3097](https://github.com/urql-graphql/urql/pull/3097), [#3106](https://github.com/urql-graphql/urql/pull/3106), [#3058](https://github.com/urql-graphql/urql/pull/3058), and [#3062](https://github.com/urql-graphql/urql/pull/3062))
+  - @urql/core@4.0.0
+
+## 5.2.0
+
+### Minor Changes
+
+- Add `isOfflineError` option to the `offlineExchange` to allow it to be customized to different conditions to determine whether an operation has failed because of a network error
+  Submitted by [@robertherber](https://github.com/robertherber) (See [#3020](https://github.com/urql-graphql/urql/pull/3020))
+- Allow `updates` config to react to arbitrary type updates other than just `Mutation` and `Subscription` fields.
+  You’ll now be able to write updaters that react to any entity field being written to the cache,
+  which allows for more granular invalidations. **Note:** If you’ve previously used `updates.Mutation`
+  and `updated.Subscription` with a custom schema with custom root names, you‘ll get a warning since
+  you’ll have to update your `updates` config to reflect this. This was a prior implementation
+  mistake!
+  Submitted by [@kitten](https://github.com/kitten) (See [#2979](https://github.com/urql-graphql/urql/pull/2979))
+
+### Patch Changes
+
+- ⚠️ Fix regression which caused partial results, whose refetches were blocked by the looping protection, to not have a `stale: true` flag added to them. This is a regression from https://github.com/urql-graphql/urql/pull/2831 and only applies to `cacheExchange`s that had the `schema` option set
+  Submitted by [@kitten](https://github.com/kitten) (See [#2999](https://github.com/urql-graphql/urql/pull/2999))
+- Add `invariant` to data layer that prevents cache writes during cache query operations. This prevents `cache.writeFragment`, `cache.updateQuery`, and `cache.link` from being called in `resolvers` for instance
+  Submitted by [@kitten](https://github.com/kitten) (See [#2978](https://github.com/urql-graphql/urql/pull/2978))
+- Updated dependencies (See [#3007](https://github.com/urql-graphql/urql/pull/3007), [#2962](https://github.com/urql-graphql/urql/pull/2962), [#3007](https://github.com/urql-graphql/urql/pull/3007), [#3015](https://github.com/urql-graphql/urql/pull/3015), and [#3022](https://github.com/urql-graphql/urql/pull/3022))
+  - @urql/core@3.2.0
+
+## 5.0.9
+
+### Patch Changes
+
+- ⚠️ Fix potential data loss in `offlineExchange` that's caused when `onOnline` triggers and flushes mutation queue before the mutation queue is used, by [@trcoffman](https://github.com/trcoffman) (See [#2945](https://github.com/urql-graphql/urql/pull/2945))
+- Patch message for `(16) Heuristic Fragment Matching`, by [@inokawa](https://github.com/inokawa) (See [#2923](https://github.com/urql-graphql/urql/pull/2923))
+- Patch message for (19) Can't generate a key for invalidate(...) error, by [@inokawa](https://github.com/inokawa) (See [#2918](https://github.com/urql-graphql/urql/pull/2918))
+
+## 5.0.8
+
+### Patch Changes
+
+- ⚠️ Fix operation being blocked for looping due to it not cancelling the looping protection when a `teardown` is received. This bug could be triggered when a shared query operation triggers again and causes a cache miss (e.g. due to an error). The re-execution of the operation would then be blocked as Graphcache considered it a "reexecution loop" rather than a legitimate execution triggered by the UI. (See https://github.com/urql-graphql/urql/pull/2737 for more information), by [@kitten](https://github.com/kitten) (See [#2876](https://github.com/urql-graphql/urql/pull/2876))
+
+## 5.0.7
+
+### Patch Changes
+
+- ⚠️ Fix type-generation, with a change in TS/Rollup the type generation took the paths as src and resolved them into the types dir, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2870](https://github.com/urql-graphql/urql/pull/2870))
+- Updated dependencies (See [#2872](https://github.com/urql-graphql/urql/pull/2872), [#2870](https://github.com/urql-graphql/urql/pull/2870), and [#2871](https://github.com/urql-graphql/urql/pull/2871))
+  - @urql/core@3.1.1
+
+## 5.0.6
+
+### Patch Changes
+
+- Solve issue where partial data could cause loops between related queries, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2831](https://github.com/urql-graphql/urql/pull/2831))
+- Add skipping of garbage collection runs when the cache is waiting for optimistic, deferred or other results in layers. This means that we only take an opportunity to run garbage collection after results have settled and are hence decreasing the chance of hogging the event loop when a run isn't needed, by [@kitten](https://github.com/kitten) (See [#2862](https://github.com/urql-graphql/urql/pull/2862))
+- ⚠️ Fix a deadlock condition in Graphcache's layers, which is caused by subscriptions (or other deferred layers) starting before one-off mutation layers. This causes the mutation to not be completed, which keeps its data preferred above the deferred layer. That in turn means that layers stop squashing, which causes new results to be missing indefinitely, when they overlap, by [@kitten](https://github.com/kitten) (See [#2861](https://github.com/urql-graphql/urql/pull/2861))
+- Updated dependencies (See [#2843](https://github.com/urql-graphql/urql/pull/2843), [#2847](https://github.com/urql-graphql/urql/pull/2847), [#2850](https://github.com/urql-graphql/urql/pull/2850), and [#2846](https://github.com/urql-graphql/urql/pull/2846))
+  - @urql/core@3.1.0
+
+## 5.0.5
+
+### Patch Changes
+
+- Set operations when updating the cache with a result, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2782](https://github.com/FormidableLabs/urql/pull/2782))
+
+## 5.0.4
+
+### Patch Changes
+
+- Ensure we aren't eagerly removing layers that are caused by subscriptions, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2771](https://github.com/FormidableLabs/urql/pull/2771))
+
+## 5.0.3
+
+### Patch Changes
+
+- ⚠️ Fix case where a mutation would also be counted in the loop-protection, this prevented partial queries from initiating refetches, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2761](https://github.com/FormidableLabs/urql/pull/2761))
+- Updated dependencies (See [#2758](https://github.com/FormidableLabs/urql/pull/2758) and [#2762](https://github.com/FormidableLabs/urql/pull/2762))
+  - @urql/core@3.0.5
+
+## 5.0.2
+
+### Patch Changes
+
+- Preserve the original `DocumentNode` AST when updating the cache, to prevent results after a network request from differing and breaking referential equality due to added `__typename` fields, by [@kitten](https://github.com/kitten) (See [#2736](https://github.com/FormidableLabs/urql/pull/2736))
+- ⚠️ Fix optimistic mutations containing partial results (`undefined` fields), which previously actually caused a hidden cache miss, which may then affect a subsequent non-optimistic mutation result, by [@kitten](https://github.com/kitten) (See [#2740](https://github.com/FormidableLabs/urql/pull/2740))
+- Prevent cache misses from causing infinite network requests from being issued, when two operations manipulate each other while experiencing cache misses or are partially uncacheable, by [@kitten](https://github.com/kitten) (See [#2737](https://github.com/FormidableLabs/urql/pull/2737))
+- ⚠️ Fix operation identities preventing users from deeply cloning operation contexts. Instead, we now use a client-wide counter (rolling over as needed).
+  While this changes an internal data structure in `@urql/core` only, this change also affects the `offlineExchange` in `@urql/exchange-graphcache` due to it relying on the identity being previously an object rather than an integer, by [@kitten](https://github.com/kitten) (See [#2732](https://github.com/FormidableLabs/urql/pull/2732))
+- ⚠️ Fix referential equality preservation in Graphcache failing after API results, due to a typo writing the API result rather than the updated cache result, by [@kitten](https://github.com/kitten) (See [#2741](https://github.com/FormidableLabs/urql/pull/2741))
+- Updated dependencies (See [#2691](https://github.com/FormidableLabs/urql/pull/2691), [#2692](https://github.com/FormidableLabs/urql/pull/2692), and [#2732](https://github.com/FormidableLabs/urql/pull/2732))
+  - @urql/core@3.0.4
+
+## 5.0.1
+
+### Patch Changes
+
+- Adjust timing of when an introspected schema will be processed into field maps, interface maps, and union type maps. By making this lazy we can avoid excessive work when these maps aren't actually ever used, by [@kitten](https://github.com/kitten) (See [#2640](https://github.com/FormidableLabs/urql/pull/2640))
+
+## 5.0.0
+
+### Major Changes
+
+- **Goodbye IE11!** 👋 This major release removes support for IE11. All code that is shipped will be transpiled much less and will _not_ be ES5-compatible anymore, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+- Prevent cache-hydration from buffering operations, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2612](https://github.com/FormidableLabs/urql/pull/2612))
+- Implement stricter variables types, which require variables to always be passed and match TypeScript types when the generic is set or inferred. This is a breaking change for TypeScript users potentially, unless all types are adhered to, by [@kitten](https://github.com/kitten) (See [#2607](https://github.com/FormidableLabs/urql/pull/2607))
+- Upgrade to [Wonka v6](https://github.com/0no-co/wonka) (`wonka@^6.0.0`), which has no breaking changes but is built to target ES2015 and comes with other minor improvements.
+  The library has fully been migrated to TypeScript which will hopefully help with making contributions easier!, by [@kitten](https://github.com/kitten) (See [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+
+### Minor Changes
+
+- Remove the `babel-plugin-modular-graphql` helper, this because the graphql package hasn't converted to ESM yet which gives issues in node environments, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2551](https://github.com/FormidableLabs/urql/pull/2551))
+- Allow passing in `fragmentName` for `write` and `read` operations, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2609](https://github.com/FormidableLabs/urql/pull/2609))
+
+### Patch Changes
+
+- Graphcache's `optimistic` option now accepts optimistic mutation resolvers that return fields by
+  name rather than alias. Previously, depending on which mutation was run, the optimistic resolvers
+  would read your optimistic data by field alias (i.e. "alias" for `alias: id` rather than "id").
+  Instead, optimistic updates now correctly use field names and allow you to also pass resolvers as
+  values on your optimistic config, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2616](https://github.com/FormidableLabs/urql/pull/2616))
+- Updated dependencies (See [#2551](https://github.com/FormidableLabs/urql/pull/2551), [#2504](https://github.com/FormidableLabs/urql/pull/2504), [#2619](https://github.com/FormidableLabs/urql/pull/2619), [#2607](https://github.com/FormidableLabs/urql/pull/2607), and [#2504](https://github.com/FormidableLabs/urql/pull/2504))
+  - @urql/core@3.0.0
+
+## 4.4.3
+
+### Patch Changes
+
+- Correctly reorder optimistic layers when we see repeated keys coming in, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2489](https://github.com/FormidableLabs/urql/pull/2489))
+
+## 4.4.2
+
+### Patch Changes
+
+- Keep track of mutations in the offline exchange so we can accurately recreate the original variables, there could be more variables for use in updater functions which we strip away in graphCache before sending to the API, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2472](https://github.com/FormidableLabs/urql/pull/2472))
+
+## 4.4.1
+
+### Patch Changes
+
+- Switch `isFragmentHeuristicallyMatching()` to always return `true` for writes, so that we give every fragment a chance to be applied and to write to the cache, by [@kitten](https://github.com/kitten) (See [#2455](https://github.com/FormidableLabs/urql/pull/2455))
+- ⚠️ Fix default storage persisting data after `clear()` was called on it, by [@JoviDeCroock](https://github.com/JoviDeCroock) (See [#2458](https://github.com/FormidableLabs/urql/pull/2458))
+- Updated dependencies (See [#2446](https://github.com/FormidableLabs/urql/pull/2446), [#2456](https://github.com/FormidableLabs/urql/pull/2456), and [#2457](https://github.com/FormidableLabs/urql/pull/2457))
+  - @urql/core@2.5.0
+
 ## 4.4.0
 
 ### Minor Changes

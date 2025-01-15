@@ -3,27 +3,22 @@ export * from '@urql/core';
 export * from './useClientHandle';
 export { install, provideClient } from './useClient';
 
-export {
-  useQuery,
-  UseQueryArgs,
-  UseQueryResponse,
-  UseQueryState,
-} from './useQuery';
+export { useQuery } from './useQuery';
 
-export {
-  useSubscription,
+export type { UseQueryArgs, UseQueryResponse, UseQueryState } from './useQuery';
+
+export { useSubscription } from './useSubscription';
+
+export type {
   UseSubscriptionArgs,
   UseSubscriptionResponse,
-  UseSubscriptionState,
   SubscriptionHandlerArg,
   SubscriptionHandler,
 } from './useSubscription';
 
-export {
-  useMutation,
-  UseMutationResponse,
-  UseMutationState,
-} from './useMutation';
+export { useMutation } from './useMutation';
+
+export type { UseMutationResponse } from './useMutation';
 
 import { install } from './useClient';
 

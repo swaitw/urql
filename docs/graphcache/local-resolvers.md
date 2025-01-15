@@ -60,10 +60,24 @@ A resolver may be attached to any type's field and accepts four positional argum
   docs](../api/graphcache.md#info).
 
 The local resolvers may return any value that fits the query document's shape, however we must
-ensure that what we return matches the types of our schema. It for instance isn't possible to turn a
+ensure that what we return matches the types of our schema. It, for instance, isn't possible to turn a
 record field into a link, i.e. replace a scalar with an entity. Instead, local resolvers are useful
 to transform records, like dates in our previous example, or to imitate server-side logic to allow
 Graphcache to retrieve more data from its cache without sending a query to our API.
+
+Furthermore, while we see on this page that we get access to methods like `cache.resolve` and other
+methods to read from our cache, only ["Cache Updates"](./cache-updates.md) get to write and change
+the cache. If you call `cache.updateQuery`, `cache.writeFragment`, or `cache.link` in resolvers,
+you‘ll get an error, since it‘s not possible to update the cache while reading from it.
+
+When writing a resolver you’ll mostly use `cache.resolve`, which can be chained, to read field
+values from the cache. When a field points to another entity we may get a key, but resolvers are
+allowed to return keys or partial entities containing keys.
+
+> **Note:** This essentially means that resolvers can return either scalar values for fields without
+> selection sets, and either partial entities or keys for fields with selection sets, i.e.
+> links / relations. When we return `null`, this will be interpreted a the literal GraphQL Null scalar,
+> while returning `undefined` will cause a cache miss.
 
 ## Transforming Records
 
@@ -101,8 +115,7 @@ current query traversal, and the part of the query document the cache is process
 operating on. Hence, we can create a reusable resolver like so:
 
 ```js
-const transformToDate = (parent, _args, _cache, info) =>
-  new Date(parent[info.fieldName]);
+const transformToDate = (parent, _args, _cache, info) => new Date(parent[info.fieldName]);
 
 cacheExchange({
   resolvers: {
@@ -124,9 +137,7 @@ cacheExchange({
   resolvers: {
     Todo: {
       text: (parent, args) => {
-        return args.capitalize && parent.text
-          ? parent.text.toUpperCase()
-          : parent.text;
+        return args.capitalize && parent.text ? parent.text.toUpperCase() : parent.text;
       },
     },
   },
@@ -178,14 +189,13 @@ cacheExchange({
 The `__typename` field is required. Graphcache will [use its keying
 logic](./normalized-caching.md#custom-keys-and-non-keyable-entities), and your custom `keys`
 configuration to generate a key for this entity and will then be able to look this entity up in its
-local cache. As with regular queries, the resolver is known to return a link since the `todo(id:
-$id) { id }` will be used with a selection set, querying fields on the entity.
+local cache. As with regular queries, the resolver is known to return a link since the `todo(id: $id) { id }` will be used with a selection set, querying fields on the entity.
 
 ### Resolving by keys
 
 Resolvers can also directly return keys. We've previously learned [on the "Normalized Caching"
 page](./normalized-caching.md#custom-keys-and-non-keyable-entities) that the key for our example above
-would look something like `"Todo:1"` for `todo(id: 1)`. While it isn't adivsable to create keys
+would look something like `"Todo:1"` for `todo(id: 1)`. While it isn't advisable to create keys
 manually in your resolvers, if you returned a key directly this would still work.
 
 Essentially, returning `{ __typename, id }` may sometimes be the same as returning the key manually.
@@ -198,8 +208,7 @@ While it doesn't make much sense in this case, our example can be rewritten as:
 cacheExchange({
   resolvers: {
     Query: {
-      todo: (_, args, cache) =>
-        cache.keyOfEntity({ __typename: 'Todo', id: args.id }),
+      todo: (_, args, cache) => cache.keyOfEntity({ __typename: 'Todo', id: args.id }),
     },
   },
 });
@@ -222,15 +231,14 @@ link can return a partial entity [or a key](#resolving-by-keys).
 
 However sometimes we'll need to resolve data from other fields in our resolvers.
 
-For records, if the other field is on the same `parent` entity, it may seem logical to access it on
-`parent[otherFieldName]` as well, however the `parent` object will only be sparsely populated with
-fields that the cache has already queried prior to reaching the resolver.
+> **Note:** For records, if the other field is on the same `parent` entity, it may seem logical to access it on
+> `parent[otherFieldName]` as well, however the `parent` object will only be sparsely populated with
+> fields that the cache has already queried prior to reaching the resolver.
+> In the previous example, where we've created a resolver for `Todo.updatedAt` and accessed
+> `parent.updatedAt` to transform its value the `parent.updatedAt` field is essentially a shortcut
+> that allows us to get to the record quickly.
 
-In the previous example, where we've created a resolver for `Todo.updatedAt` and accessed
-`parent.updatedAt` to transform its value the `parent.updatedAt` field is essentially a shortcut
-that allows us to get to the record quickly.
-
-Instead we can use the [the `cache.resolve` method](../api/graphcache.md#resolve). This method
+Instead we can use [the `cache.resolve` method](../api/graphcache.md#resolve). This method
 allows us to access Graphcache's cached data directly. It is used to resolve records or links on any
 given entity and accepts three arguments:
 
@@ -253,8 +261,7 @@ avoid using the `parent[fieldName]` shortcut:
 cacheExchange({
   resolvers: {
     Todo: {
-      updatedAt: (parent, _args, cache) =>
-        new Date(cache.resolve(parent, "updatedAt")),
+      updatedAt: (parent, _args, cache) => new Date(cache.resolve(parent, 'updatedAt')),
     },
   },
 });
@@ -262,9 +269,10 @@ cacheExchange({
 
 When we call `cache.resolve(parent, "updatedAt")`, the cache will look up the `"updatedAt"` field on
 the `parent` entity, i.e. on the current `Todo` entity.
-We've also previously learned that `parent` may not contain all fields that the entity may have and
-may hence be missing its keyable fields, like `id`, so why does this then work?
-It works because `cache.resolve(parent)` is a shortcut for `cache.resolve(info.parentKey)`.
+
+> **Note:** We've also previously learned that `parent` may not contain all fields that the entity may have and
+> may hence be missing its keyable fields, like `id`, so why does this then work?
+> It works because `cache.resolve(parent)` is a shortcut for `cache.resolve(info.parentKey)`.
 
 Like the `info.fieldName` property `info.parentKey` gives us information about the current state of
 Graphcache's query operation. In this case, `info.parentKey` tells us what the parent's key is.
@@ -279,8 +287,7 @@ case we could write a resolver like so:
 cacheExchange({
   resolvers: {
     Todo: {
-      updatedAt: (parent, _args, cache) =>
-        parent.updatedAt || cache.resolve(parent, "createdAt")
+      updatedAt: (parent, _args, cache) => parent.updatedAt || cache.resolve(parent, 'createdAt'),
     },
   },
 });
@@ -299,10 +306,7 @@ cacheExchange({
   resolvers: {
     Todo: {
       createdAt: (parent, _args, cache) =>
-        cache.resolve(
-          cache.resolve(parent, "author"), /* "Author:1" */
-          "createdAt"
-        )
+        cache.resolve(cache.resolve(parent, 'author') /* "Author:1" */, 'createdAt'),
     },
   },
 });
@@ -313,9 +317,13 @@ may return records for fields without selection sets, in other cases it may give
 other entities ("links") instead. It can even give you arrays of keys or records when the field's
 value contains a list.
 
-It's a pretty flexible method that allows us to access arbitrary values from our cache, however, we
-have to be careful about what value will be resolved by it, since the cache can't know itself what
-type of value it may return.
+When a value is not present in the cache, `cache.resolve` will instead return `undefined` to signal
+that a value is uncached. Similarly, a resolver may return `undefined` to tell Graphcache that the
+field isn’t cached and that a call to the API is necessary.
+
+`cache.resolve` is a pretty flexible method that allows us to access arbitrary values from our cache,
+however, we have to be careful about what value will be resolved by it, since the cache can't know
+itself what type of value it may return.
 
 The last trick this method allows you to apply is to access arbitrary fields on the root `Query`
 type. If we call `cache.resolve("Query", ...)` then we're also able to access arbitrary fields
@@ -387,17 +395,17 @@ variables we can execute an entirely new GraphQL query against our cached data:
 
 ```js
 import { gql } from '@urql/core';
-import { cacheExchange } from '@urql/exchange-graphcache';
+import { cacheExchange } from '@urql/exchange-graphcache';
 
 const cache = cacheExchange({
   updates: {
     Mutation: {
       addTodo: (result, args, cache) => {
         const data = cache.readQuery({ query: Todos, variables: { from: 0, limit: 10 } });
-      }
-    }
-  }
-})
+      },
+    },
+  },
+});
 ```
 
 This way we'll get the stored data for the `TodosQuery` for the given `variables`.
@@ -411,7 +419,7 @@ accepts a `fragment` and an `id`. This looks like the following.
 
 ```js
 import { gql } from '@urql/core';
-import { cacheExchange } from '@urql/exchange-graphcache';
+import { cacheExchange } from '@urql/exchange-graphcache';
 
 const cache = cacheExchange({
   resolvers: {
@@ -426,10 +434,10 @@ const cache = cacheExchange({
           `,
           { id: 1 }
         );
-      }
-    }
-  }
-})
+      },
+    },
+  },
+});
 ```
 
 > **Note:** In the above example, we've used
@@ -446,6 +454,121 @@ case `{ id: 1 }`.
 The cache read methods are not possible outside of GraphQL operations. This means these methods will
 be limited to the different `Graphcache` configuration methods.
 
+## Living with limitations of Local Resolvers
+
+Local Resolvers are powerful tools using which we can tell Graphcache what to do with a certain
+field beyond using results it’s seen on prior API results. However, it’s limitations come from this
+very intention they were made for.
+
+Resolvers are meant to augment Graphcache and teach it what to do with some fields. Sometimes this
+is trivial and simple (like most examples on this page), but other times, fields are incredibly
+complex to reproduce and hence resolvers become more complex.
+
+This section is not exhaustive, but documents some of the more commonly asked for features of
+resolvers. However, beyond the cases listed below, resolvers are limited and:
+
+- can't manipulate or see other fields on the current entity, or fields above it.
+- can't update the cache (they're only “computations” but don't change the cache)
+- can't change the query document that's sent to the API
+
+### Writing reusable resolvers
+
+As we've seen before in the ["Transforming Records" section above](#transforming-records), we can
+write generic resolvers by using the fourth argument that resolvers receive, the `ResolveInfo`
+object.
+
+This `info` object gives our resolvers some context on where they’re being executed and gives it
+information about the current field and its surroundings.
+
+For instance, while Graphcache has a convenience helper to access a current record on the parent
+object for scalar values, it doesn't for links. Hence, if we're trying to read relationships we have
+to use `cache.resolve`.
+
+```js
+cacheExchange({
+  resolvers: {
+    Todo: {
+      // This works:
+      updatedAt: parent => parent.updatedAt,
+      // This won't work:
+      author: parent => parent.author,
+    },
+  },
+});
+```
+
+The `info` object actually gives us two ways of accessing the original field's value:
+
+```js
+const resolver = (parent, args, cache, info) => {
+  // This is the full version
+  const original = cache.resolve(info.parentKey, info.fieldName, args);
+  // But we can replace `info.parentKey` with `parent` as a shortcut
+  const original = cache.resolve(parent, info.fieldName, args);
+  // And we can also avoid re-using arguments by using `fieldKey`
+  const original = cache.resolve(parent, info.fieldKey);
+};
+```
+
+Apart from telling us how to access the originally cached field value, we can also get more
+information from `info` about our field. For instance, we can:
+
+- Read the current field's name using `info.fieldName`
+- Read the current field's key using `info.parentFieldKey`
+- Read the current parent entity's key using `info.parentKey`
+- Read the current parent entity's typename using `info.parentTypename`
+- Access the current operation's raw variables using `info.variables`
+- Access the current operation's raw fragments using `info.fragments`
+
+### Causing cache misses and partial misses
+
+When we write resolvers we provide Graphcache with a value for the current field, or rather with
+"behavior", that it will execute no matter whether this field is also cached or not.
+
+This means that, unless our resolver returns `undefined`, if the query doesn't have any other cache
+misses, Graphcache will consider the field a cache hit and will, unless other cache misses occur,
+not make a network request.
+
+> **Note:** An exception for this is [Schema Awareness](./schema-awareness.md), which can
+> automatically cause partial cache misses.
+
+However, sometimes we may want a resolver to return a result, while still sending a GraphQL API
+request in the background to update our resolver’s values.
+
+To achieve this we can update the `info.partial` field.
+
+```js
+cacheExchange({
+  resolvers: {
+    Todo: {
+      author(parent, args, cache, info) {
+        const author = cache.resolve(parent, info.fieldKey);
+        if (author === null) {
+          info.partial = true;
+        }
+        return author;
+      },
+    },
+  },
+});
+```
+
+Suppose we have a field that our GraphQL schema _sometimes_ returns a `null` value for, but that may
+be upated with a value in the future. In the above example, we wrote a resolver that sets
+`info.partial = true` if a field’s value is `null`. This causes Graphcache to consider the result
+“partial and stale” and will cause it to make a background request to the API, while still
+delivering the outdated result.
+
+### Conditionally applying resolvers
+
+We may not always want a resolver to be used. While sometimes this can be dangerous (if your
+resolver affects the shape and types of your fields), in other cases this is necessary.
+For instance, if your resolver handles infinite-scroll pagination, like the examples [in the next
+section](#pagination), then you may not always want to apply this resolver.
+
+For this reason, Graphcache also supports [“local directives”, which are introduced on the next docs
+page.](./local-directives.md)
+
 ## Pagination
 
 `Graphcache` offers some preset `resolvers` to help us out with endless scrolling pagination, also
@@ -456,6 +579,14 @@ They're not meant to implement infinite pagination for _any app_, instead they'r
 like to add infinite pagination to an app quickly to try it out or if we're unable to replace it
 with separate components per page in environments like React Native, where a `FlatList` would
 require a flat, infinite list of items.
+
+> **Note:** If you don't need a flat array of results, you can also achieve infinite pagination
+> with only UI code. [You can find a code example of UI infinite pagination in our example folder.](https://github.com/urql-graphql/urql/tree/main/examples/with-pagination)
+
+[You can find a code example of infinite pagination with Graphcahce in our example folder.](https://github.com/urql-graphql/urql/tree/main/examples/with-graphcache-pagination).
+Please keep in mind that this patterns has some limitations when you're handling cache updates.
+Deleting old pages from the cache selectively may be difficult, so the UI pattern in the above
+note is preferred.
 
 ### Simple Pagination
 
@@ -525,6 +656,10 @@ const cache = cacheExchange({
     Query: {
       todos: relayPagination(),
     },
+    // Or if the pagination happens in a nested field:
+    User: {
+      todos: relayPagination(),
+    },
   },
 });
 ```
@@ -542,7 +677,7 @@ Example series of requests:
 
 ```
 first: 1 => node 1, endCursor: a
-first: 1, after: 1 => node 2, endCursor: b
+first: 1, after: a => node 2, endCursor: b
 ...
 last: 1 => node 99, startCursor: c
 last: 1, before: c => node 89, startCursor: d
@@ -558,4 +693,4 @@ cannot be stiched together.
 
 ### Reading on
 
-[On the next page we'll learn about "Cache Updates".](./cache-updates.md)
+[On the next page we'll learn about "Cache Directives".](./local-directives.md)

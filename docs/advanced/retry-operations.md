@@ -9,6 +9,8 @@ The `retryExchange` lets us retry specific operation, by default it will
 retry only network errors, but we can specify additional options to add
 functionality.
 
+> **Note:** [You can find a code example for `@urql/exchange-retry` in an example in the `urql` repository.](https://github.com/urql-graphql/urql/tree/main/examples/with-retry)
+
 ## Installation and Setup
 
 First install `@urql/exchange-retry` alongside `urql`:
@@ -22,7 +24,7 @@ npm install --save @urql/exchange-retry
 You'll then need to add the `retryExchange`, exposed by this package, to your `urql` Client:
 
 ```js
-import { createClient, dedupExchange, cacheExchange, fetchExchange } from 'urql';
+import { Client, cacheExchange, fetchExchange } from 'urql';
 import { retryExchange } from '@urql/exchange-retry';
 
 // None of these options have to be added, these are the default values.
@@ -36,10 +38,9 @@ const options = {
 
 // Note the position of the retryExchange - it should be placed prior to the
 // fetchExchange and after the cacheExchange for it to function correctly
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:1234/graphql',
   exchanges: [
-    dedupExchange,
     cacheExchange,
     retryExchange(options), // Use the retryExchange factory to add a new exchange
     fetchExchange,
@@ -59,7 +60,7 @@ Next up is the `maxDelayMs`, our `retryExchange` will keep increasing the time b
 
 Talking about increasing the `delay` randomly, `randomDelay` allows us to disable this. When this option is set to `false` we'll only increase the time between attempts with the `initialDelayMs`. This means if we fail the first time we'll have 1 second wait, next fail we'll have 2 seconds and so on.
 
-We don't want to infinitely attempt an `operation`, we can declare how many times it should attempt the `operation` with `maxNumberAttempts`.
+We can declare how many times it should attempt the `operation` with `maxNumberAttempts`, otherwise, it defaults to 2. If you want it to retry indefinitely, you can simply pass in `Number.POSITIVE_INFINITY`.
 
 [For more information on the available options check out the API Docs.](../api/retry-exchange.md)
 
@@ -69,17 +70,16 @@ We can introduce specific triggers for the `retryExchange` to start retrying ope
 let's look at an example:
 
 ```js
-import { createClient, dedupExchange, cacheExchange, fetchExchange } from 'urql';
+import { Client, cacheExchange, fetchExchange } from 'urql';
 import { retryExchange } from '@urql/exchange-retry';
 
-const client = createClient({
+const client = new Client({
   url: 'http://localhost:1234/graphql',
   exchanges: [
-    dedupExchange,
     cacheExchange,
     retryExchange({
       retryIf: error => {
-        return !!(error.graphQLErrors.length > 0 || error.networkError);
+        return !!(error.graphQLErrors.length > 0 || error.networkError);
       },
     }),
     fetchExchange,
